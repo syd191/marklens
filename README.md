@@ -4,6 +4,20 @@ MarkLens is a free, open-source Markdown maintenance tool for Windows. It is des
 
 MarkLens keeps the document first: the sidebar is hidden by default, the outline is the primary navigation surface, and the file tree appears only when it is useful.
 
+## Screenshots
+
+Document-first reading view:
+
+![MarkLens reading view](docs/screenshots/reading-night.png)
+
+Outline-first navigation:
+
+![MarkLens outline view](docs/screenshots/outline-night.png)
+
+Current-folder file browsing:
+
+![MarkLens files view](docs/screenshots/files-night.png)
+
 ## What It Does
 
 - Opens `.md`, `.markdown`, and `.txt` files.
