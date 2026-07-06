@@ -18,6 +18,11 @@ type SidebarDrawerProps = {
   onJump: (id: string) => void;
   onOpenFolder: () => void;
   onOpenFile: (filePath: string) => void;
+  onRootUpdate: (listing: DirectoryListing) => void;
+  onShowInFolder: (targetPath: string) => Promise<void>;
+  onCreateMarkdown: (parentPath: string) => Promise<FileOperationResult>;
+  onCreateFolder: (parentPath: string) => Promise<FileOperationResult>;
+  onRenameEntry: (targetPath: string, nextName: string) => Promise<FileOperationResult>;
   onSearchTermChange: (value: string) => void;
   onJumpToSearchMatch: (line: number) => void;
   listDirectory: (dirPath: string) => Promise<DirectoryListing>;
@@ -37,6 +42,11 @@ export function SidebarDrawer({
   onJump,
   onOpenFolder,
   onOpenFile,
+  onRootUpdate,
+  onShowInFolder,
+  onCreateMarkdown,
+  onCreateFolder,
+  onRenameEntry,
   onSearchTermChange,
   onJumpToSearchMatch,
   listDirectory
@@ -90,6 +100,11 @@ export function SidebarDrawer({
           selectedPath={currentPath}
           onOpenFolder={onOpenFolder}
           onOpenFile={onOpenFile}
+          onRootUpdate={onRootUpdate}
+          onShowInFolder={onShowInFolder}
+          onCreateMarkdown={onCreateMarkdown}
+          onCreateFolder={onCreateFolder}
+          onRenameEntry={onRenameEntry}
           listDirectory={listDirectory}
         />
       )}

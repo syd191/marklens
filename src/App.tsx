@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { MoreMenu } from "./components/MoreMenu";
 import { MarkdownPreview } from "./components/MarkdownPreview";
 import { PreferencesModal } from "./components/PreferencesModal";
@@ -7,7 +7,6 @@ import { SourceEditor } from "./components/SourceEditor";
 import { StatusBar } from "./components/StatusBar";
 import { i18n, resolveLanguage } from "./lib/i18n";
 import { buildOutline, getWordCount, renderMarkdownDocument, splitMarkdownIntoChunks } from "./lib/markdown";
-import { getSampleMarkdown, isSampleMarkdown } from "./lib/sample";
 import { loadPreferences, savePreferences } from "./lib/storage";
 import { useDebouncedEffect } from "./lib/useDebouncedEffect";
 import type { AppLanguage, CurrentDocument, Preferences, ResolvedTheme, SaveStatus, SidebarTab } from "./types";
@@ -17,12 +16,12 @@ const initialSystemTheme: ResolvedTheme =
   typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "night" : "light";
 const initialLanguage = resolveLanguage("system", browserLanguage);
 
-function createInitialDocument(language: AppLanguage): CurrentDocument {
+function createInitialDocument(): CurrentDocument {
   return {
     filePath: null,
-    name: i18n[language].untitledName,
+    name: "",
     directory: null,
-    content: getSampleMarkdown(language)
+    content: ""
   };
 }
 
@@ -37,7 +36,7 @@ function getMatches(content: string, term: string) {
 }
 
 export default function App() {
-  const [document, setDocument] = useState<CurrentDocument>(() => createInitialDocument(initialLanguage));
+  const [document, setDocument] = useState<CurrentDocument>(() => createInitialDocument());
   const [preferences, setPreferences] = useState<Preferences>(() => loadPreferences());
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(initialSystemTheme);
   const [systemLanguage, setSystemLanguage] = useState<AppLanguage>(initialLanguage);
@@ -49,6 +48,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [moreOpen, setMoreOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const rendererReadySent = useRef(false);
   const [, startTransition] = useTransition();
 
   const resolvedTheme = preferences.themeMode === "system" ? systemTheme : preferences.themeMode;
@@ -115,6 +115,49 @@ export default function App() {
     if (!listing) throw new Error("Directory listing is unavailable.");
     return listing;
   }, []);
+
+  const showInFolder = useCallback(async (targetPath: string) => {
+    const result = await window.markdownBridge?.showInFolder(targetPath);
+    if (!result?.ok) throw new Error(result?.reason ?? "Unable to show item in folder.");
+  }, []);
+
+  const createMarkdown = useCallback(
+    async (parentPath: string) => {
+      const result = await window.markdownBridge?.createMarkdown(parentPath);
+      if (result?.ok) {
+        const payload = await window.markdownBridge?.readFile(result.path);
+        if (payload) openFilePayload(payload);
+      }
+      return result ?? { ok: false, reason: "unavailable" };
+    },
+    [openFilePayload]
+  );
+
+  const createFolder = useCallback(async (parentPath: string) => {
+    const result = await window.markdownBridge?.createFolder(parentPath);
+    return result ?? { ok: false, reason: "unavailable" };
+  }, []);
+
+  const renameEntry = useCallback(
+    async (targetPath: string, nextName: string) => {
+      const result = await window.markdownBridge?.renameEntry({ targetPath, nextName });
+      if (result?.ok && document.filePath) {
+        const targetLower = targetPath.toLowerCase();
+        const currentLower = document.filePath.toLowerCase();
+        if (result.type === "file" && currentLower === targetLower) {
+          const payload = await window.markdownBridge?.readFile(result.path);
+          if (payload) openFilePayload(payload);
+        }
+        if (result.type === "directory" && currentLower.startsWith(`${targetLower}\\`)) {
+          const nextPath = `${result.path}${document.filePath.slice(targetPath.length)}`;
+          const payload = await window.markdownBridge?.readFile(nextPath);
+          if (payload) openFilePayload(payload);
+        }
+      }
+      return result ?? { ok: false, reason: "unavailable" };
+    },
+    [document.filePath, openFilePayload]
+  );
 
   const saveCurrentFile = useCallback(
     async (force = false) => {
@@ -195,19 +238,7 @@ export default function App() {
     window.markdownBridge?.getSystemLanguage().then((value) => setSystemLanguage(resolveLanguage("system", value))).catch(() => {
       setSystemLanguage(resolveLanguage("system", browserLanguage));
     });
-    window.markdownBridge?.sendRendererReady();
   }, []);
-
-  useEffect(() => {
-    setDocument((current) => {
-      if (current.filePath || !isSampleMarkdown(current.content)) return current;
-      return {
-        ...current,
-        name: t.untitledName,
-        content: getSampleMarkdown(language)
-      };
-    });
-  }, [language, t.untitledName]);
 
   useEffect(() => {
     const offTheme = window.markdownBridge?.onSystemThemeChanged(setSystemTheme);
@@ -238,6 +269,11 @@ export default function App() {
       if (command === "theme-light") updatePreferences({ ...preferences, themeMode: "light" });
       if (command === "theme-night") updatePreferences({ ...preferences, themeMode: "night" });
     });
+
+    if (!rendererReadySent.current) {
+      rendererReadySent.current = true;
+      window.markdownBridge?.sendRendererReady();
+    }
 
     return () => {
       offTheme?.();
@@ -353,6 +389,11 @@ export default function App() {
         onJump={jumpToHeading}
         onOpenFolder={openFolderDialog}
         onOpenFile={openPath}
+        onRootUpdate={setFileRoot}
+        onShowInFolder={showInFolder}
+        onCreateMarkdown={createMarkdown}
+        onCreateFolder={createFolder}
+        onRenameEntry={renameEntry}
         onSearchTermChange={setSearchTerm}
         onJumpToSearchMatch={jumpToSearchMatch}
         listDirectory={listDirectory}
@@ -393,7 +434,7 @@ export default function App() {
         sourceMode={sourceMode}
         wordCount={wordCount}
         saveStatus={saveStatus}
-        currentPath={document.filePath}
+        currentName={document.filePath ? document.name : null}
         onToggleSidebar={toggleSidebar}
         onToggleSource={() => setSourceMode((value) => !value)}
         onOpenMore={() => setMoreOpen((value) => !value)}

@@ -10,6 +10,9 @@ type SavePayload = {
   expectedMtimeMs?: number;
   force?: boolean;
 };
+type FileOperationResult =
+  | { ok: true; path: string; parentPath: string; type: "file" | "directory" }
+  | { ok: false; reason: string };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -142,6 +145,34 @@ function ensureMarkdownFile(filePath: string) {
   if (!isMarkdownLike(filePath)) {
     throw new Error("Unsupported file type. MarkLens opens .md, .markdown, and .txt files.");
   }
+}
+
+async function ensureDirectoryPath(dirPath: string) {
+  const stat = await fs.promises.stat(dirPath);
+  if (!stat.isDirectory()) throw new Error("Path is not a directory.");
+}
+
+function isValidEntryName(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed === "." || trimmed === "..") return false;
+  if (/[<>:"/\\|?*\x00-\x1F]/.test(trimmed)) return false;
+  if (/[. ]$/.test(trimmed)) return false;
+  return !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i.test(trimmed);
+}
+
+async function exists(filePath: string) {
+  return fs.promises.access(filePath).then(() => true, () => false);
+}
+
+async function getUniqueChildPath(parentPath: string, baseName: string, extension = "") {
+  let index = 0;
+  while (index < 1000) {
+    const suffix = index === 0 ? "" : ` ${index + 1}`;
+    const candidate = path.join(parentPath, `${baseName}${suffix}${extension}`);
+    if (!(await exists(candidate))) return candidate;
+    index += 1;
+  }
+  throw new Error("Unable to create a unique name.");
 }
 
 function escapeHtml(value: string) {
@@ -349,6 +380,53 @@ async function listDirectory(dirPath: string) {
   return { path: dirPath, name: path.basename(dirPath) || dirPath, children };
 }
 
+async function createMarkdownFile(parentPath: string): Promise<FileOperationResult> {
+  try {
+    await ensureDirectoryPath(parentPath);
+    const baseName = getSystemLanguage() === "zh-CN" ? "新建 Markdown" : "New Markdown";
+    const filePath = await getUniqueChildPath(parentPath, baseName, ".md");
+    await fs.promises.writeFile(filePath, "", { encoding: "utf8", flag: "wx" });
+    return { ok: true, path: filePath, parentPath, type: "file" };
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : "create-failed" };
+  }
+}
+
+async function createFolder(parentPath: string): Promise<FileOperationResult> {
+  try {
+    await ensureDirectoryPath(parentPath);
+    const baseName = getSystemLanguage() === "zh-CN" ? "新建文件夹" : "New Folder";
+    const folderPath = await getUniqueChildPath(parentPath, baseName);
+    await fs.promises.mkdir(folderPath);
+    return { ok: true, path: folderPath, parentPath, type: "directory" };
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : "create-failed" };
+  }
+}
+
+async function renameEntry(targetPath: string, nextName: string): Promise<FileOperationResult> {
+  try {
+    const cleanName = nextName.trim();
+    if (!isValidEntryName(cleanName)) return { ok: false, reason: "invalid-name" };
+
+    const stat = await fs.promises.stat(targetPath);
+    const parentPath = path.dirname(targetPath);
+    const nextPath = path.join(parentPath, cleanName);
+    if (stat.isFile() && isMarkdownLike(targetPath) && !isMarkdownLike(nextPath)) {
+      return { ok: false, reason: "invalid-extension" };
+    }
+    if (path.resolve(targetPath) === path.resolve(nextPath)) {
+      return { ok: true, path: targetPath, parentPath, type: stat.isDirectory() ? "directory" : "file" };
+    }
+    if (await exists(nextPath)) return { ok: false, reason: "already-exists" };
+
+    await fs.promises.rename(targetPath, nextPath);
+    return { ok: true, path: nextPath, parentPath, type: stat.isDirectory() ? "directory" : "file" };
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : "rename-failed" };
+  }
+}
+
 function watchFile(filePath: string | null) {
   fileWatcher?.close();
   fileWatcher = null;
@@ -436,6 +514,16 @@ function registerIpc() {
   });
 
   ipcMain.handle("dir:list", async (_event, dirPath: string) => listDirectory(dirPath));
+  ipcMain.handle("fs:show-in-folder", async (_event, targetPath: string) => {
+    if (!(await exists(targetPath))) return { ok: false, reason: "not-found" };
+    shell.showItemInFolder(targetPath);
+    return { ok: true };
+  });
+  ipcMain.handle("fs:create-markdown", async (_event, parentPath: string) => createMarkdownFile(parentPath));
+  ipcMain.handle("fs:create-folder", async (_event, parentPath: string) => createFolder(parentPath));
+  ipcMain.handle("fs:rename", async (_event, payload: { targetPath: string; nextName: string }) =>
+    renameEntry(payload.targetPath, payload.nextName)
+  );
   ipcMain.handle("file:watch", async (_event, filePath: string | null) => {
     watchFile(filePath);
     return { ok: true };

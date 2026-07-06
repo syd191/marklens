@@ -9,7 +9,7 @@ type StatusBarProps = {
   sourceMode: boolean;
   wordCount: number;
   saveStatus: SaveStatus;
-  currentPath: string | null;
+  currentName: string | null;
   onToggleSidebar: () => void;
   onToggleSource: () => void;
   onOpenMore: () => void;
@@ -21,12 +21,12 @@ export function StatusBar({
   sourceMode,
   wordCount,
   saveStatus,
-  currentPath,
+  currentName,
   onToggleSidebar,
   onToggleSource,
   onOpenMore
 }: StatusBarProps) {
-  const pathLabel = currentPath ?? t.status.noFile;
+  const fileLabel = currentName ?? t.status.noFile;
   const status = t.status.save[saveStatus];
 
   return (
@@ -42,8 +42,8 @@ export function StatusBar({
           <MoreHorizontal size={18} strokeWidth={1.8} />
         </IconButton>
       </div>
-      <div className="status-path" title={pathLabel}>
-        {pathLabel}
+      <div className="status-path">
+        {fileLabel}
       </div>
       <div className="status-right">
         {status && <span className={`save-state save-${saveStatus}`}>{status}</span>}

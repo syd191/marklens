@@ -17,6 +17,10 @@ contextBridge.exposeInMainWorld("markdownBridge", {
   exportHtml: (payload: { title: string; html: string; theme: "light" | "night" }) =>
     ipcRenderer.invoke("file:export-html", payload),
   listDirectory: (dirPath: string) => ipcRenderer.invoke("dir:list", dirPath),
+  showInFolder: (targetPath: string) => ipcRenderer.invoke("fs:show-in-folder", targetPath),
+  createMarkdown: (parentPath: string) => ipcRenderer.invoke("fs:create-markdown", parentPath),
+  createFolder: (parentPath: string) => ipcRenderer.invoke("fs:create-folder", parentPath),
+  renameEntry: (payload: { targetPath: string; nextName: string }) => ipcRenderer.invoke("fs:rename", payload),
   watchFile: (filePath: string | null) => ipcRenderer.invoke("file:watch", filePath),
   getSystemTheme: () => ipcRenderer.invoke("theme:get-system"),
   getSystemLanguage: () => ipcRenderer.invoke("locale:get-system"),

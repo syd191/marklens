@@ -2,7 +2,6 @@ import type { AppLanguage, LanguageMode, SaveStatus } from "../types";
 
 const zhCN = {
   appName: "MarkLens",
-  untitledName: "欢迎.md",
   common: {
     close: "关闭",
     openFile: "打开文件",
@@ -56,7 +55,13 @@ const zhCN = {
   files: {
     noFolder: "未打开文件夹。",
     openFolder: "打开文件夹",
-    filter: "筛选文件"
+    filter: "筛选文件",
+    showInFolder: "打开文件位置",
+    newMarkdown: "新建 MD 文件",
+    newFolder: "新建文件夹",
+    rename: "重命名",
+    renamePlaceholder: "输入新名称",
+    operationFailed: "文件操作失败"
   },
   preferences: {
     title: "偏好设置",
@@ -86,7 +91,6 @@ const zhCN = {
 
 const enUS = {
   appName: "MarkLens",
-  untitledName: "Welcome.md",
   common: {
     close: "Close",
     openFile: "Open File",
@@ -140,7 +144,13 @@ const enUS = {
   files: {
     noFolder: "No folder opened.",
     openFolder: "Open Folder",
-    filter: "Filter files"
+    filter: "Filter files",
+    showInFolder: "Show in File Explorer",
+    newMarkdown: "New MD File",
+    newFolder: "New Folder",
+    rename: "Rename",
+    renamePlaceholder: "Enter a new name",
+    operationFailed: "File operation failed"
   },
   preferences: {
     title: "Preferences",

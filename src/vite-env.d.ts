@@ -30,6 +30,10 @@ type SaveResult =
   | { ok: true; mtimeMs: number }
   | { ok: false; reason: "conflict" | "cancelled" | string; mtimeMs?: number };
 
+type FileOperationResult =
+  | { ok: true; path: string; parentPath: string; type: "file" | "directory" }
+  | { ok: false; reason: string };
+
 type MarkdownBridge = {
   openFileDialog: () => Promise<OpenedFile | null>;
   openFolderDialog: () => Promise<DirectoryListing | null>;
@@ -42,6 +46,10 @@ type MarkdownBridge = {
   }) => Promise<SaveResult>;
   exportHtml: (payload: { title: string; html: string; theme: ResolvedTheme }) => Promise<SaveResult>;
   listDirectory: (dirPath: string) => Promise<DirectoryListing>;
+  showInFolder: (targetPath: string) => Promise<{ ok: boolean; reason?: string }>;
+  createMarkdown: (parentPath: string) => Promise<FileOperationResult>;
+  createFolder: (parentPath: string) => Promise<FileOperationResult>;
+  renameEntry: (payload: { targetPath: string; nextName: string }) => Promise<FileOperationResult>;
   watchFile: (filePath: string | null) => Promise<{ ok: boolean }>;
   getSystemTheme: () => Promise<ResolvedTheme>;
   getSystemLanguage: () => Promise<string>;
