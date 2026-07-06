@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MarkLens</title>
+    <script>
+      (() => {
+        try {
+          const saved = JSON.parse(localStorage.getItem("marklens-preferences-v1") || "{}");
+          const systemNight = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+          const theme = saved.themeMode === "night" || (saved.themeMode !== "light" && systemNight) ? "night" : "light";
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme = theme === "night" ? "dark" : "light";
+        } catch {
+          if (window.matchMedia?.("(prefers-color-scheme: dark)")?.matches) {
+            document.documentElement.dataset.theme = "night";
+            document.documentElement.style.colorScheme = "dark";
+          }
+        }
+      })();
+    </script>
+    <style>
+      html,
+      body,
+      #root {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      html,
+      body {
+        background: #ffffff;
+      }
+
+      html[data-theme="night"],
+      html[data-theme="night"] body {
+        background: #1f1f1f;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

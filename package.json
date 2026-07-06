@@ -1,0 +1,52 @@
+{
+  "name": "marklens",
+  "version": "0.1.0",
+  "description": "A free Markdown maintenance tool for Windows.",
+  "license": "MIT",
+  "author": "Codex",
+  "main": "dist-electron/main.js",
+  "type": "module",
+  "scripts": {
+    "build:electron": "tsc -p tsconfig.node.json",
+    "dev": "npm run build:electron && concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && npm run dev:electron\"",
+    "dev:electron": "electron .",
+    "build": "tsc -p tsconfig.node.json && tsc -p tsconfig.json && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "pack": "npm run build && electron-builder --win portable --config electron-builder.json && node scripts/apply-icon.mjs",
+    "dist": "npm run build && electron-builder --win nsis portable --config electron-builder.json && node scripts/apply-icon.mjs",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm run test && npm audit --omit=dev"
+  },
+  "dependencies": {
+    "@mdit/plugin-katex": "^1.0.1",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.16.22",
+    "lucide-react": "^0.468.0",
+    "markdown-it": "^14.2.0",
+    "markdown-it-anchor": "^9.2.0",
+    "markdown-it-task-lists": "^2.1.1",
+    "mermaid": "^11.4.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.17",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
+    "jsdom": "^29.1.1",
+    "rcedit": "^5.0.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^4.1.9",
+    "wait-on": "^8.0.1"
+  }
+}

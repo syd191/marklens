@@ -1,0 +1,181 @@
+import type { AppLanguage, LanguageMode, SaveStatus } from "../types";
+
+const zhCN = {
+  appName: "MarkLens",
+  untitledName: "欢迎.md",
+  common: {
+    close: "关闭",
+    openFile: "打开文件",
+    openFolder: "打开文件夹",
+    exportHtml: "导出 HTML",
+    preferences: "偏好设置"
+  },
+  status: {
+    noFile: "未打开文件",
+    showOutline: "显示大纲",
+    hideOutline: "隐藏侧栏",
+    sourceMode: "源码模式",
+    returnPreview: "返回预览",
+    more: "更多",
+    words: (count: number) => `${count.toLocaleString("zh-CN")} 字/词`,
+    save: {
+      clean: "",
+      unsaved: "未保存",
+      saving: "保存中...",
+      saved: "已保存",
+      failed: "保存失败",
+      conflict: "文件冲突"
+    } satisfies Record<SaveStatus, string>
+  },
+  theme: {
+    system: "跟随系统",
+    light: "浅色",
+    night: "夜间"
+  },
+  language: {
+    label: "界面语言",
+    system: "跟随系统",
+    chinese: "简体中文",
+    english: "English"
+  },
+  drawer: {
+    aria: "侧栏",
+    outline: "大纲",
+    files: "文件",
+    closeSidebar: "关闭侧栏",
+    searchDocument: "搜索当前文档",
+    line: (line: number) => `第 ${line} 行`,
+    noMatches: "无匹配结果。",
+    noFile: "未打开文件"
+  },
+  outline: {
+    aria: "文档大纲",
+    empty: "当前文档没有标题。",
+    line: (line: number) => `第 ${line} 行`
+  },
+  files: {
+    noFolder: "未打开文件夹。",
+    openFolder: "打开文件夹",
+    filter: "筛选文件"
+  },
+  preferences: {
+    title: "偏好设置",
+    close: "关闭偏好设置",
+    nav: {
+      appearance: "外观",
+      language: "界面语言",
+      files: "文件",
+      performance: "性能"
+    },
+    groups: {
+      appearance: "外观",
+      files: "文件",
+      performance: "性能"
+    },
+    fontSize: "字体大小",
+    autoRefresh: "外部文件变化时自动刷新",
+    autoSave: "自动保存源码编辑",
+    autoSaveDelay: "自动保存延迟",
+    smoothScroll: "平滑滚动",
+    preloadOutline: "打开文件后预生成大纲",
+    delay500: "500 毫秒",
+    delay1000: "1 秒",
+    delay3000: "3 秒"
+  }
+};
+
+const enUS = {
+  appName: "MarkLens",
+  untitledName: "Welcome.md",
+  common: {
+    close: "Close",
+    openFile: "Open File",
+    openFolder: "Open Folder",
+    exportHtml: "Export HTML",
+    preferences: "Preferences"
+  },
+  status: {
+    noFile: "No file opened",
+    showOutline: "Show Outline",
+    hideOutline: "Hide Sidebar",
+    sourceMode: "Source Mode",
+    returnPreview: "Return to Preview",
+    more: "More",
+    words: (count: number) => `${count.toLocaleString("en-US")} words`,
+    save: {
+      clean: "",
+      unsaved: "Unsaved",
+      saving: "Saving...",
+      saved: "Saved",
+      failed: "Save failed",
+      conflict: "Conflict"
+    } satisfies Record<SaveStatus, string>
+  },
+  theme: {
+    system: "Follow System",
+    light: "Light",
+    night: "Night"
+  },
+  language: {
+    label: "Interface Language",
+    system: "Follow System",
+    chinese: "Simplified Chinese",
+    english: "English"
+  },
+  drawer: {
+    aria: "Sidebar",
+    outline: "Outline",
+    files: "Files",
+    closeSidebar: "Close sidebar",
+    searchDocument: "Search document",
+    line: (line: number) => `Line ${line}`,
+    noMatches: "No matches.",
+    noFile: "No file"
+  },
+  outline: {
+    aria: "Document outline",
+    empty: "No headings in this document.",
+    line: (line: number) => `Line ${line}`
+  },
+  files: {
+    noFolder: "No folder opened.",
+    openFolder: "Open Folder",
+    filter: "Filter files"
+  },
+  preferences: {
+    title: "Preferences",
+    close: "Close preferences",
+    nav: {
+      appearance: "Appearance",
+      language: "Interface Language",
+      files: "Files",
+      performance: "Performance"
+    },
+    groups: {
+      appearance: "Appearance",
+      files: "Files",
+      performance: "Performance"
+    },
+    fontSize: "Font size",
+    autoRefresh: "Auto refresh when the file changes outside this app",
+    autoSave: "Auto save source edits",
+    autoSaveDelay: "Auto save delay",
+    smoothScroll: "Smooth scrolling",
+    preloadOutline: "Preload outline after opening files",
+    delay500: "500 ms",
+    delay1000: "1 second",
+    delay3000: "3 seconds"
+  }
+};
+
+export const i18n = {
+  "zh-CN": zhCN,
+  "en-US": enUS
+};
+
+export type AppStrings = typeof enUS;
+
+export function resolveLanguage(mode: LanguageMode, systemLanguage: string): AppLanguage {
+  if (mode !== "system") return mode;
+  return systemLanguage.toLowerCase().startsWith("zh") ? "zh-CN" : "en-US";
+}

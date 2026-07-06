@@ -1,0 +1,47 @@
+{
+  "appId": "com.marklens.reader",
+  "productName": "MarkLens",
+  "directories": {
+    "output": "../../outputs"
+  },
+  "files": [
+    "assets/**/*",
+    "dist/**/*",
+    "dist-electron/**/*",
+    "package.json"
+  ],
+  "win": {
+    "target": ["nsis", "portable"],
+    "icon": "assets/icon.ico",
+    "signExecutable": false
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "installerIcon": "assets/icon.ico",
+    "uninstallerIcon": "assets/icon.ico",
+    "installerHeaderIcon": "assets/icon.ico"
+  },
+  "portable": {
+    "artifactName": "MarkLens-${version}-${arch}-portable.${ext}"
+  },
+  "fileAssociations": [
+    {
+      "ext": "md",
+      "name": "Markdown Document",
+      "description": "Markdown Document",
+      "icon": "assets/icon.ico",
+      "role": "Editor"
+    },
+    {
+      "ext": "markdown",
+      "name": "Markdown Document",
+      "description": "Markdown Document",
+      "icon": "assets/icon.ico",
+      "role": "Editor"
+    }
+  ]
+}
