@@ -1,7 +1,7 @@
 {
   "name": "marklens",
   "version": "0.1.0",
-  "description": "A free Markdown maintenance tool for Windows.",
+  "description": "免费的 Markdown 维护工具，用于阅读、整理和轻量编辑 MD 文件。Free Markdown maintenance tool for reading, organizing, and lightly editing Markdown files.",
   "license": "MIT",
   "author": "Codex",
   "main": "dist-electron/main.js",
