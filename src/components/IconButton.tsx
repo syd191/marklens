@@ -15,6 +15,7 @@ export function IconButton({ title, active, disabled, children, onClick }: IconB
       type="button"
       title={title}
       aria-label={title}
+      aria-pressed={active === undefined ? undefined : active}
       disabled={disabled}
       onClick={onClick}
     >

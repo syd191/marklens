@@ -61,6 +61,9 @@ export function SidebarDrawer({
           <button type="button" className={tab === "files" ? "is-active" : ""} onClick={() => onSetTab("files")}>
             {t.drawer.files}
           </button>
+          <button type="button" className={tab === "search" ? "is-active" : ""} onClick={() => onSetTab("search")}>
+            搜索
+          </button>
         </div>
         <button className="drawer-close" type="button" onClick={onClose} aria-label={t.drawer.closeSidebar}>
           <X size={15} />
@@ -68,6 +71,8 @@ export function SidebarDrawer({
       </div>
 
       {tab === "outline" ? (
+        <OutlinePanel t={t} outline={outline} onJump={onJump} />
+      ) : tab === "search" ? (
         <>
           <div className="drawer-search">
             <Search size={14} />
@@ -90,7 +95,7 @@ export function SidebarDrawer({
               )}
             </div>
           ) : (
-            <OutlinePanel t={t} outline={outline} onJump={onJump} />
+            <div className="empty-panel">{t.drawer.searchDocument}</div>
           )}
         </>
       ) : (

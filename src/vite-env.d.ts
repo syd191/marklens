@@ -2,8 +2,8 @@
 
 declare module "markdown-it-task-lists";
 
-type ThemeMode = "system" | "light" | "night";
-type ResolvedTheme = "light" | "night";
+type ThemeMode = "system" | "github" | "newsprint" | "night" | "pixyll" | "whitey";
+type ResolvedTheme = "github" | "newsprint" | "night" | "pixyll" | "whitey";
 
 type OpenedFile = {
   filePath: string;
@@ -44,21 +44,46 @@ type MarkdownBridge = {
     expectedMtimeMs?: number;
     force?: boolean;
   }) => Promise<SaveResult>;
+  saveFileAs: (payload: { filePath?: string | null; content: string }) => Promise<OpenedFile | null>;
+  moveFile: (filePath: string) => Promise<OpenedFile | null>;
+  deleteFile: (filePath: string) => Promise<{ ok: boolean; reason?: string }>;
+  getFileProperties: (filePath: string) => Promise<{
+    name: string;
+    path: string;
+    size: number;
+    createdAt: number;
+    modifiedAt: number;
+  } | null>;
+  confirmUnsaved: (name: string | null) => Promise<"save" | "discard" | "cancel">;
+  resolveSaveConflict: (name: string | null) => Promise<"overwrite" | "reload" | "cancel">;
   exportHtml: (payload: { title: string; html: string; theme: ResolvedTheme }) => Promise<SaveResult>;
+  exportPdf: (defaultName: string) => Promise<SaveResult>;
+  saveImage: (payload: { directory: string | null; name: string; data: ArrayBuffer }) => Promise<{
+    ok: boolean;
+    path?: string;
+    markdownPath?: string;
+    reason?: string;
+  }>;
   listDirectory: (dirPath: string) => Promise<DirectoryListing>;
   showInFolder: (targetPath: string) => Promise<{ ok: boolean; reason?: string }>;
   createMarkdown: (parentPath: string) => Promise<FileOperationResult>;
   createFolder: (parentPath: string) => Promise<FileOperationResult>;
   renameEntry: (payload: { targetPath: string; nextName: string }) => Promise<FileOperationResult>;
   watchFile: (filePath: string | null) => Promise<{ ok: boolean }>;
-  getSystemTheme: () => Promise<ResolvedTheme>;
+  getSystemTheme: () => Promise<"light" | "night">;
   getSystemLanguage: () => Promise<string>;
+  createNewWindow: () => Promise<{ ok: boolean }>;
+  print: () => Promise<{ ok: boolean; reason?: string }>;
+  setFullscreen: (enabled: boolean) => Promise<{ ok: boolean }>;
+  setAlwaysOnTop: (enabled: boolean) => Promise<{ ok: boolean }>;
+  setZoom: (factor: number) => Promise<{ ok: boolean }>;
+  closeWindow: (force?: boolean) => Promise<{ ok: boolean }>;
   getPathForFile: (file: File) => string;
   sendRendererReady: () => void;
   onCommand: (callback: (command: string) => void) => () => void;
   onOpenPath: (callback: (filePath: string) => void) => () => void;
   onFileChanged: (callback: (payload: { filePath: string; mtimeMs: number }) => void) => () => void;
-  onSystemThemeChanged: (callback: (theme: ResolvedTheme) => void) => () => void;
+  onSystemThemeChanged: (callback: (theme: "light" | "night") => void) => () => void;
 };
 
 interface Window {

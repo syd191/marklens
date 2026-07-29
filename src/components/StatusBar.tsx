@@ -1,4 +1,4 @@
-import { Code2, MoreHorizontal, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Code2, Focus, MoreHorizontal, PanelLeftClose, PanelLeftOpen, TextCursorInput } from "lucide-react";
 import { IconButton } from "./IconButton";
 import type { AppStrings } from "../lib/i18n";
 import type { SaveStatus } from "../types";
@@ -7,11 +7,20 @@ type StatusBarProps = {
   t: AppStrings;
   sidebarOpen: boolean;
   sourceMode: boolean;
+  focusMode: boolean;
+  typewriterMode: boolean;
   wordCount: number;
+  line: number;
+  column: number;
+  zoom: number;
   saveStatus: SaveStatus;
   currentName: string | null;
   onToggleSidebar: () => void;
   onToggleSource: () => void;
+  onToggleFocus: () => void;
+  onToggleTypewriter: () => void;
+  onOpenWordCount: () => void;
+  onZoomChange: (zoom: number) => void;
   onOpenMore: () => void;
 };
 
@@ -19,11 +28,20 @@ export function StatusBar({
   t,
   sidebarOpen,
   sourceMode,
+  focusMode,
+  typewriterMode,
   wordCount,
+  line,
+  column,
+  zoom,
   saveStatus,
   currentName,
   onToggleSidebar,
   onToggleSource,
+  onToggleFocus,
+  onToggleTypewriter,
+  onOpenWordCount,
+  onZoomChange,
   onOpenMore
 }: StatusBarProps) {
   const fileLabel = currentName ?? t.status.noFile;
@@ -38,6 +56,12 @@ export function StatusBar({
         <IconButton title={sourceMode ? t.status.returnPreview : t.status.sourceMode} active={sourceMode} onClick={onToggleSource}>
           <Code2 size={18} strokeWidth={1.8} />
         </IconButton>
+        <IconButton title="专注模式 (F8)" active={focusMode} onClick={onToggleFocus}>
+          <Focus size={17} strokeWidth={1.8} />
+        </IconButton>
+        <IconButton title="打字机模式 (F9)" active={typewriterMode} onClick={onToggleTypewriter}>
+          <TextCursorInput size={17} strokeWidth={1.8} />
+        </IconButton>
         <IconButton title={t.status.more} onClick={onOpenMore}>
           <MoreHorizontal size={18} strokeWidth={1.8} />
         </IconButton>
@@ -47,7 +71,16 @@ export function StatusBar({
       </div>
       <div className="status-right">
         {status && <span className={`save-state save-${saveStatus}`}>{status}</span>}
-        <span>{t.status.words(wordCount)}</span>
+        <span>行 {line}，列 {column}</span>
+        <button type="button" className="status-text-button" onClick={onOpenWordCount}>{t.status.words(wordCount)}</button>
+        <select
+          className="status-zoom"
+          aria-label="缩放"
+          value={zoom}
+          onChange={(event) => onZoomChange(Number(event.target.value))}
+        >
+          {[75, 90, 100, 110, 125, 150, 175, 200].map((value) => <option key={value} value={value}>{value}%</option>)}
+        </select>
       </div>
     </footer>
   );

@@ -14,8 +14,17 @@ contextBridge.exposeInMainWorld("markdownBridge", {
   readFile: (filePath: string) => ipcRenderer.invoke("file:read", filePath),
   saveFile: (payload: { filePath: string; content: string; expectedMtimeMs?: number; force?: boolean }) =>
     ipcRenderer.invoke("file:save", payload),
-  exportHtml: (payload: { title: string; html: string; theme: "light" | "night" }) =>
+  saveFileAs: (payload: { filePath?: string | null; content: string }) => ipcRenderer.invoke("file:save-as", payload),
+  moveFile: (filePath: string) => ipcRenderer.invoke("file:move", filePath),
+  deleteFile: (filePath: string) => ipcRenderer.invoke("file:delete", filePath),
+  getFileProperties: (filePath: string) => ipcRenderer.invoke("file:properties", filePath),
+  confirmUnsaved: (name: string | null) => ipcRenderer.invoke("dialog:confirm-unsaved", name),
+  resolveSaveConflict: (name: string | null) => ipcRenderer.invoke("dialog:resolve-save-conflict", name),
+  exportHtml: (payload: { title: string; html: string; theme: "github" | "newsprint" | "night" | "pixyll" | "whitey" }) =>
     ipcRenderer.invoke("file:export-html", payload),
+  exportPdf: (defaultName: string) => ipcRenderer.invoke("file:export-pdf", defaultName),
+  saveImage: (payload: { directory: string | null; name: string; data: ArrayBuffer }) =>
+    ipcRenderer.invoke("image:save", payload),
   listDirectory: (dirPath: string) => ipcRenderer.invoke("dir:list", dirPath),
   showInFolder: (targetPath: string) => ipcRenderer.invoke("fs:show-in-folder", targetPath),
   createMarkdown: (parentPath: string) => ipcRenderer.invoke("fs:create-markdown", parentPath),
@@ -24,6 +33,12 @@ contextBridge.exposeInMainWorld("markdownBridge", {
   watchFile: (filePath: string | null) => ipcRenderer.invoke("file:watch", filePath),
   getSystemTheme: () => ipcRenderer.invoke("theme:get-system"),
   getSystemLanguage: () => ipcRenderer.invoke("locale:get-system"),
+  createNewWindow: () => ipcRenderer.invoke("window:new"),
+  print: () => ipcRenderer.invoke("window:print"),
+  setFullscreen: (enabled: boolean) => ipcRenderer.invoke("window:set-fullscreen", enabled),
+  setAlwaysOnTop: (enabled: boolean) => ipcRenderer.invoke("window:set-always-on-top", enabled),
+  setZoom: (factor: number) => ipcRenderer.invoke("window:set-zoom", factor),
+  closeWindow: (force = false) => ipcRenderer.invoke("window:close", force),
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
   sendRendererReady: () => ipcRenderer.send("renderer:ready"),
   onCommand: (callback: (command: string) => void) => on<string>("app:command", callback),
