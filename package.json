@@ -1,9 +1,9 @@
 {
   "name": "marklens",
-  "version": "0.1.0",
-  "description": "免费的 Markdown 维护工具，用于阅读、整理和轻量编辑 MD 文件。Free Markdown maintenance tool for reading, organizing, and lightly editing Markdown files.",
+  "version": "0.2.0",
+  "description": "免费的所见即所得 Markdown 编辑与维护工具。Free WYSIWYG Markdown editor and maintenance tool.",
   "license": "MIT",
-  "author": "Codex",
+  "author": "syd191",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
@@ -21,8 +21,10 @@
   },
   "dependencies": {
     "@mdit/plugin-katex": "^1.0.1",
+    "@mdxeditor/editor": "^4.1.1",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.22",
+    "lexical": "^0.48.0",
     "lucide-react": "^0.468.0",
     "markdown-it": "^14.2.0",
     "markdown-it-anchor": "^9.2.0",

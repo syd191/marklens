@@ -28,8 +28,11 @@ const zhCN = {
   },
   theme: {
     system: "跟随系统",
-    light: "浅色",
-    night: "夜间"
+    github: "Github",
+    newsprint: "Newsprint",
+    night: "Night",
+    pixyll: "Pixyll",
+    whitey: "Whitey"
   },
   language: {
     label: "界面语言",
@@ -80,6 +83,7 @@ const zhCN = {
     fontSize: "字体大小",
     autoRefresh: "外部文件变化时自动刷新",
     autoSave: "自动保存源码编辑",
+    spellCheck: "编辑时进行拼写检查",
     autoSaveDelay: "自动保存延迟",
     smoothScroll: "平滑滚动",
     preloadOutline: "打开文件后预生成大纲",
@@ -117,8 +121,11 @@ const enUS = {
   },
   theme: {
     system: "Follow System",
-    light: "Light",
-    night: "Night"
+    github: "Github",
+    newsprint: "Newsprint",
+    night: "Night",
+    pixyll: "Pixyll",
+    whitey: "Whitey"
   },
   language: {
     label: "Interface Language",
@@ -169,6 +176,7 @@ const enUS = {
     fontSize: "Font size",
     autoRefresh: "Auto refresh when the file changes outside this app",
     autoSave: "Auto save source edits",
+    spellCheck: "Check spelling while editing",
     autoSaveDelay: "Auto save delay",
     smoothScroll: "Smooth scrolling",
     preloadOutline: "Preload outline after opening files",

@@ -50,7 +50,7 @@ export function PreferencesModal({ t, open, preferences, onChange, onClose }: Pr
             {section === "appearance" && <section className="preference-group">
               <h3>{t.preferences.groups.appearance}</h3>
               <div className="segmented-list">
-                {(["system", "light", "night"] as ThemeMode[]).map((mode) => (
+                {(["system", "github", "newsprint", "night", "pixyll", "whitey"] as ThemeMode[]).map((mode) => (
                   <label key={mode}>
                     <input
                       type="radio"
@@ -58,7 +58,7 @@ export function PreferencesModal({ t, open, preferences, onChange, onClose }: Pr
                       checked={preferences.themeMode === mode}
                       onChange={() => update("themeMode", mode)}
                     />
-                    <span>{mode === "system" ? t.theme.system : mode === "light" ? t.theme.light : t.theme.night}</span>
+                    <span>{mode === "system" ? t.theme.system : t.theme[mode]}</span>
                   </label>
                 ))}
               </div>
@@ -108,6 +108,14 @@ export function PreferencesModal({ t, open, preferences, onChange, onClose }: Pr
                   onChange={(event) => update("autoSave", event.target.checked)}
                 />
                 <span>{t.preferences.autoSave}</span>
+              </label>
+              <label className="checkbox-setting">
+                <input
+                  type="checkbox"
+                  checked={preferences.spellCheck}
+                  onChange={(event) => update("spellCheck", event.target.checked)}
+                />
+                <span>{t.preferences.spellCheck}</span>
               </label>
               <label className="inline-setting">
                 <span>{t.preferences.autoSaveDelay}</span>

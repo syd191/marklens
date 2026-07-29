@@ -1,8 +1,8 @@
-export type ThemeMode = "system" | "light" | "night";
-export type ResolvedTheme = "light" | "night";
+export type ThemeMode = "system" | "github" | "newsprint" | "night" | "pixyll" | "whitey";
+export type ResolvedTheme = Exclude<ThemeMode, "system">;
 export type AppLanguage = "zh-CN" | "en-US";
 export type LanguageMode = "system" | "zh-CN" | "en-US";
-export type SidebarTab = "outline" | "files";
+export type SidebarTab = "outline" | "files" | "search";
 export type SaveStatus = "clean" | "unsaved" | "saving" | "saved" | "failed" | "conflict";
 
 export type Preferences = {
@@ -14,6 +14,7 @@ export type Preferences = {
   smoothScroll: boolean;
   preloadOutline: boolean;
   fontSize: number;
+  spellCheck: boolean;
 };
 
 export type OutlineItem = {
