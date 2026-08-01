@@ -8,10 +8,10 @@ import { SourceEditor, type CursorPosition, type SourceEditorHandle } from "./co
 import { StatusBar } from "./components/StatusBar";
 import { WordCountModal } from "./components/WordCountModal";
 import { i18n, resolveLanguage } from "./lib/i18n";
-import { buildOutline, getWordCount, renderMarkdownDocument, splitMarkdownIntoChunks } from "./lib/markdown";
+import { buildOutline, getWordCount, renderMarkdownDocument, renderMermaidDiagrams, splitMarkdownIntoChunks } from "./lib/markdown";
 import { loadPreferences, savePreferences } from "./lib/storage";
 import { useDebouncedEffect } from "./lib/useDebouncedEffect";
-import type { AppLanguage, CurrentDocument, Preferences, ResolvedTheme, SaveStatus, SidebarTab } from "./types";
+import type { AppLanguage, CurrentDocument, OutlineItem, Preferences, ResolvedTheme, SaveStatus, SidebarTab } from "./types";
 
 const browserLanguage = typeof navigator !== "undefined" ? navigator.language : "en-US";
 const initialSystemTheme: ResolvedTheme =
@@ -75,9 +75,22 @@ export default function App() {
   const [cursor, setCursor] = useState<CursorPosition>({ start: 0, end: 0, line: 1, column: 1 });
   const editorRef = useRef<SourceEditorHandle>(null);
   const richEditorRef = useRef<RichMarkdownEditorHandle>(null);
+  // 编辑器容器 ref，用于大纲跳转在富文本模式下按文本查找 heading 元素
+  const editorContainerRef = useRef<HTMLDivElement>(null);
   const rendererReadySent = useRef(false);
   const closeInProgressRef = useRef(false);
   const confirmTransitionRef = useRef<() => Promise<boolean>>(async () => true);
+  // 用 ref 保存最新的 document/saveStatus/preferences，避免在 IPC 订阅 effect 中
+  // 把这些易变值放入依赖数组导致监听器频繁重订阅（#15）以及闭包陈旧问题（#3）
+  const documentRef = useRef(document);
+  documentRef.current = document;
+  const saveStatusRef = useRef(saveStatus);
+  saveStatusRef.current = saveStatus;
+  const preferencesRef = useRef(preferences);
+  preferencesRef.current = preferences;
+  // 记录最近一次自动保存成功时的 content 快照，避免保存成功后因 saveStatus 变化
+  // 再次触发 effect 重复保存（#2）
+  const lastAutoSavedContentRef = useRef<string | null>(null);
   const [, startTransition] = useTransition();
 
   const resolvedTheme: ResolvedTheme = preferences.themeMode === "system" ? systemTheme : preferences.themeMode;
@@ -111,6 +124,8 @@ export default function App() {
       setSearchTerm("");
       setMoreOpen(false);
     });
+    // 切换文件时重置自动保存快照，避免新文件内容恰好与上一文件相同时被错误跳过
+    lastAutoSavedContentRef.current = null;
     window.markdownBridge?.watchFile(payload.filePath);
   }, []);
 
@@ -194,47 +209,62 @@ export default function App() {
   const saveCurrentFile = useCallback(
     async (force = false) => {
       if (!document.filePath) return false;
+      const snapshot = {
+        filePath: document.filePath,
+        content: document.content,
+        mtimeMs: document.mtimeMs,
+        name: document.name
+      };
+      const setSnapshotStatus = (status: SaveStatus) => {
+        if (documentRef.current.filePath === snapshot.filePath) setSaveStatus(status);
+      };
+      const completeSnapshotSave = (mtimeMs: number) => {
+        const latest = documentRef.current;
+        const isStillCurrent = latest.filePath === snapshot.filePath && latest.content === snapshot.content;
+        setDocument((current) =>
+          current.filePath === snapshot.filePath ? { ...current, mtimeMs } : current
+        );
+        setSnapshotStatus(isStillCurrent ? "saved" : "unsaved");
+        return isStillCurrent;
+      };
+
       setSaveStatus("saving");
       try {
         const result = await window.markdownBridge?.saveFile({
-          filePath: document.filePath,
-          content: document.content,
-          expectedMtimeMs: document.mtimeMs,
+          filePath: snapshot.filePath,
+          content: snapshot.content,
+          expectedMtimeMs: snapshot.mtimeMs,
           force
         });
         if (result?.ok) {
-          setDocument((current) => ({ ...current, mtimeMs: result.mtimeMs }));
-          setSaveStatus("saved");
-          return true;
+          return completeSnapshotSave(result.mtimeMs);
         } else if (result?.reason === "conflict") {
-          setSaveStatus("conflict");
-          const resolution = await window.markdownBridge?.resolveSaveConflict(document.name || null) ?? "cancel";
+          setSnapshotStatus("conflict");
+          const resolution = await window.markdownBridge?.resolveSaveConflict(snapshot.name || null) ?? "cancel";
           if (resolution === "overwrite") {
             const forced = await window.markdownBridge?.saveFile({
-              filePath: document.filePath,
-              content: document.content,
+              filePath: snapshot.filePath,
+              content: snapshot.content,
               expectedMtimeMs: result.mtimeMs,
               force: true
             });
             if (forced?.ok) {
-              setDocument((current) => ({ ...current, mtimeMs: forced.mtimeMs }));
-              setSaveStatus("saved");
-              return true;
+              return completeSnapshotSave(forced.mtimeMs);
             }
-            setSaveStatus("failed");
+            setSnapshotStatus("failed");
           } else if (resolution === "reload") {
-            const payload = await window.markdownBridge?.readFile(document.filePath);
-            if (payload) {
+            const payload = await window.markdownBridge?.readFile(snapshot.filePath);
+            if (payload && documentRef.current.filePath === snapshot.filePath) {
               openFilePayload(payload);
               return true;
             }
-            setSaveStatus("failed");
+            setSnapshotStatus("failed");
           }
         } else {
-          setSaveStatus("failed");
+          setSnapshotStatus("failed");
         }
       } catch {
-        setSaveStatus("failed");
+        setSnapshotStatus("failed");
       }
       return false;
     },
@@ -282,10 +312,11 @@ export default function App() {
     if (!document.filePath) return;
     const result = await window.markdownBridge?.deleteFile(document.filePath);
     if (result?.ok) {
+      // 先停止文件监听，再清空状态，避免旧监听器在状态提交前触发（#1）
+      window.markdownBridge?.watchFile(null);
       setDocument(createInitialDocument());
       setSaveStatus("clean");
       setFileRoot(null);
-      window.markdownBridge?.watchFile(null);
     }
   }, [document.filePath]);
 
@@ -300,7 +331,9 @@ export default function App() {
   }, [document.filePath]);
 
   const exportHtml = useCallback(async () => {
-    const html = renderMarkdownDocument(document.content, document.directory);
+    const rawHtml = renderMarkdownDocument(document.content, document.directory);
+    // 预渲染 mermaid 图表为 SVG，使导出的 HTML 自包含、可离线查看
+    const html = await renderMermaidDiagrams(rawHtml, resolvedTheme === "night");
     await window.markdownBridge?.exportHtml({ title: document.name.replace(/\.[^.]+$/, ""), html, theme: resolvedTheme });
     setMoreOpen(false);
   }, [document.content, document.directory, document.name, resolvedTheme]);
@@ -316,24 +349,53 @@ export default function App() {
     setSaveStatus("unsaved");
     setSearchTerm("");
     setReplaceTerm("");
+    // 重置自动保存快照，避免连续创建空文档时第二个被跳过
+    lastAutoSavedContentRef.current = null;
     window.markdownBridge?.watchFile(null);
     window.requestAnimationFrame(() => editorRef.current?.focus());
   }, [confirmDocumentTransition]);
 
   const runEditorCommand = useCallback((command: string) => {
     if (!sourceMode && richEditorRef.current?.execute(command)) return;
-    const run = () => editorRef.current?.execute(command);
+    // 切换到源码模式后，SourceEditor 尚未挂载，editorRef.current 仍为 null。
+    // 使用 requestAnimationFrame 等待挂载完成后再执行，并再次校验 ref 存在（#4）
+    const run = () => {
+      const target = editorRef.current;
+      if (!target) {
+        // 若仍未挂载，再等一帧后重试一次
+        window.requestAnimationFrame(() => editorRef.current?.execute(command));
+        return;
+      }
+      target.execute(command);
+    };
     if (!sourceMode) {
       setSourceMode(true);
-      window.setTimeout(run, 0);
+      window.requestAnimationFrame(run);
     } else {
       run();
     }
   }, [sourceMode]);
 
-  const jumpToHeading = useCallback((id: string) => {
-    const target = window.document.getElementById(id);
-    target?.scrollIntoView({ behavior: preferences.smoothScroll ? "smooth" : "auto", block: "start" });
+  const jumpToHeading = useCallback((item: OutlineItem) => {
+    // 优先按 markdown-it 渲染管线生成的 id 定位（源码模式预览/导出 HTML 场景）
+    const target = window.document.getElementById(item.id);
+    if (target) {
+      target.scrollIntoView({ behavior: preferences.smoothScroll ? "smooth" : "auto", block: "start" });
+      return;
+    }
+    // 富文本模式（MDXEditor）下 heading 元素无 id，回退按层级+文本在编辑器内查找。
+    const editor = editorContainerRef.current;
+    if (editor) {
+      const tagName = `h${Math.min(6, Math.max(1, item.level))}`;
+      const normalizedText = item.text.trim();
+      const headings = editor.querySelectorAll<HTMLElement>(tagName);
+      for (const heading of headings) {
+        if (heading.textContent?.trim() === normalizedText) {
+          heading.scrollIntoView({ behavior: preferences.smoothScroll ? "smooth" : "auto", block: "start" });
+          return;
+        }
+      }
+    }
   }, [preferences.smoothScroll]);
 
   const jumpToSearchMatch = useCallback(
@@ -383,37 +445,81 @@ export default function App() {
     });
   }, []);
 
+  // IPC 监听只注册一次；每次事件触发时再读取最新操作，避免输入过程中因
+  // document 变化反复解除/注册 Electron 监听器。
+  const ipcActions = {
+    createNewDocument,
+    deleteCurrentFile,
+    exportHtml,
+    exportPdf,
+    language,
+    moveCurrentFile,
+    openFileDialog,
+    openFolderDialog,
+    openFilePayload,
+    openPath,
+    requestClose,
+    runEditorCommand,
+    saveAs,
+    saveCurrentFile,
+    showInFolder,
+    showProperties,
+    updatePreferences
+  };
+  const ipcActionsRef = useRef(ipcActions);
+  ipcActionsRef.current = ipcActions;
+
   useEffect(() => {
     const offTheme = window.markdownBridge?.onSystemThemeChanged((theme) => setSystemTheme(theme === "night" ? "night" : "github"));
-    const offOpenPath = window.markdownBridge?.onOpenPath(openPath);
+    const offOpenPath = window.markdownBridge?.onOpenPath((filePath) => ipcActionsRef.current.openPath(filePath));
+    // 文件外部变化通知：通过 ref 读取最新的 document/saveStatus/preferences，
+    // 避免把这些易变值放入依赖数组导致监听器频繁重订阅（#15、#3）
     const offChanged = window.markdownBridge?.onFileChanged(async ({ filePath, mtimeMs }) => {
-      if (!preferences.autoRefresh || filePath !== document.filePath || saveStatus !== "clean" && saveStatus !== "saved") return;
-      if (document.mtimeMs && Math.abs(document.mtimeMs - mtimeMs) < 2) return;
+      const currentDoc = documentRef.current;
+      const currentStatus = saveStatusRef.current;
+      const currentPrefs = preferencesRef.current;
+      if (!currentPrefs.autoRefresh || filePath !== currentDoc.filePath) return;
+      if (currentStatus !== "clean" && currentStatus !== "saved") return;
+      if (currentDoc.mtimeMs && Math.abs(currentDoc.mtimeMs - mtimeMs) < 2) return;
       const payload = await window.markdownBridge?.readFile(filePath);
-      if (payload) openFilePayload(payload);
+      // 异步读取期间用户可能切换文件或开始编辑。只有文档、内容、mtime 与
+      // 保存状态都仍是读取前快照时，才允许应用外部内容。
+      const latestDoc = documentRef.current;
+      const latestStatus = saveStatusRef.current;
+      if (
+        latestDoc.filePath !== currentDoc.filePath ||
+        latestDoc.content !== currentDoc.content ||
+        latestDoc.mtimeMs !== currentDoc.mtimeMs ||
+        (latestStatus !== "clean" && latestStatus !== "saved")
+      ) return;
+      if (payload) ipcActionsRef.current.openFilePayload(payload);
     });
 
+    // 命令通道：同样通过 ref 读取最新的 preferences/document，避免重订阅（#15）
     const offCommand = window.markdownBridge?.onCommand((command) => {
-      if (command === "new") void createNewDocument();
+      const actions = ipcActionsRef.current;
+      const currentDoc = documentRef.current;
+      const currentPrefs = preferencesRef.current;
+      if (command === "new") void actions.createNewDocument();
       if (command === "new-window") window.markdownBridge?.createNewWindow();
-      if (command === "open-file") openFileDialog();
-      if (command === "quick-open" || command === "import") openFileDialog();
-      if (command === "open-folder") openFolderDialog();
+      if (command === "open-file") actions.openFileDialog();
+      if (command === "quick-open" || command === "import") actions.openFileDialog();
+      if (command === "open-folder") actions.openFolderDialog();
       if (command === "save") {
-        if (document.filePath) void saveCurrentFile();
-        else void saveAs();
+        if (currentDoc.filePath) void actions.saveCurrentFile();
+        else void actions.saveAs();
       }
-      if (command === "save-as") saveAs();
-      if (command === "move-to") moveCurrentFile();
-      if (command === "save-all") saveCurrentFile();
-      if (command === "properties") showProperties();
-      if (command === "show-in-folder" && document.filePath) showInFolder(document.filePath);
-      if (command === "delete-file") deleteCurrentFile();
-      if (command === "export-html") exportHtml();
-      if (command === "export-pdf") exportPdf();
+      if (command === "save-as") actions.saveAs();
+      if (command === "move-to") actions.moveCurrentFile();
+      if (command === "save-all") actions.saveCurrentFile();
+      if (command === "properties") actions.showProperties();
+      if (command === "show-in-folder" && currentDoc.filePath) actions.showInFolder(currentDoc.filePath);
+      if (command === "delete-file") actions.deleteCurrentFile();
+      if (command === "export-html") actions.exportHtml();
+      if (command === "export-pdf") actions.exportPdf();
       if (command === "print") window.markdownBridge?.print();
       if (command === "preferences") setPreferencesOpen(true);
-      if (command === "close-window" || command === "request-close") void requestClose();
+      if (command === "close-window" || command === "request-close") void actions.requestClose();
       if (command === "find-replace") {
         setSourceMode(true);
         setFindReplaceOpen(true);
@@ -454,17 +560,17 @@ export default function App() {
         });
       }
       if (command === "toggle-spellcheck") {
-        updatePreferences({ ...preferences, spellCheck: !preferences.spellCheck });
+        actions.updatePreferences({ ...currentPrefs, spellCheck: !currentPrefs.spellCheck });
       }
       if (command === "emoji") {
-        window.alert(language === "zh-CN" ? "请按 Win + . 打开 Windows 表情与符号面板。" : "Press Win + . to open the Windows emoji and symbols panel.");
+        window.alert(actions.language === "zh-CN" ? "请按 Win + . 打开 Windows 表情与符号面板。" : "Press Win + . to open the Windows emoji and symbols panel.");
       }
-      if (command === "theme-system") updatePreferences({ ...preferences, themeMode: "system" });
-      if (command === "theme-github") updatePreferences({ ...preferences, themeMode: "github" });
-      if (command === "theme-newsprint") updatePreferences({ ...preferences, themeMode: "newsprint" });
-      if (command === "theme-night") updatePreferences({ ...preferences, themeMode: "night" });
-      if (command === "theme-pixyll") updatePreferences({ ...preferences, themeMode: "pixyll" });
-      if (command === "theme-whitey") updatePreferences({ ...preferences, themeMode: "whitey" });
+      if (command === "theme-system") actions.updatePreferences({ ...currentPrefs, themeMode: "system" });
+      if (command === "theme-github") actions.updatePreferences({ ...currentPrefs, themeMode: "github" });
+      if (command === "theme-newsprint") actions.updatePreferences({ ...currentPrefs, themeMode: "newsprint" });
+      if (command === "theme-night") actions.updatePreferences({ ...currentPrefs, themeMode: "night" });
+      if (command === "theme-pixyll") actions.updatePreferences({ ...currentPrefs, themeMode: "pixyll" });
+      if (command === "theme-whitey") actions.updatePreferences({ ...currentPrefs, themeMode: "whitey" });
 
       const editorCommands = new Set([
         "undo", "redo", "copy-plain", "copy-markdown", "copy-html", "paste-plain",
@@ -477,7 +583,7 @@ export default function App() {
         "footnote", "horizontal-rule", "toc", "front-matter", "bold", "italic", "underline",
         "inline-code", "strikethrough", "comment", "link", "image", "clear-format"
       ]);
-      if (editorCommands.has(command)) runEditorCommand(command);
+      if (editorCommands.has(command)) actions.runEditorCommand(command);
     });
 
     if (!rendererReadySent.current) {
@@ -491,33 +597,17 @@ export default function App() {
       offChanged?.();
       offCommand?.();
     };
-  }, [
-    document.filePath,
-    document.mtimeMs,
-    createNewDocument,
-    deleteCurrentFile,
-    exportHtml,
-    exportPdf,
-    moveCurrentFile,
-    openFileDialog,
-    openFolderDialog,
-    openFilePayload,
-    openPath,
-    preferences,
-    requestClose,
-    runEditorCommand,
-    saveAs,
-    saveCurrentFile,
-    saveStatus,
-    showInFolder,
-    showProperties,
-    updatePreferences
-  ]);
+  }, []);
 
   useDebouncedEffect(
     () => {
       if (!preferences.autoSave || !document.filePath || saveStatus !== "unsaved") return;
-      saveCurrentFile(false);
+      // 防止保存成功后 saveStatus 由 "unsaved" -> "saved" 触发本 effect 再次执行：
+      // 仅当 content 与上次成功自动保存的快照不同时才保存（#2）
+      if (lastAutoSavedContentRef.current === document.content) return;
+      void saveCurrentFile(false).then((ok) => {
+        if (ok) lastAutoSavedContentRef.current = document.content;
+      });
     },
     preferences.autoSaveDelay,
     [document.content, preferences.autoSave, preferences.autoSaveDelay, saveStatus]
@@ -620,7 +710,8 @@ export default function App() {
   const replaceAll = useCallback(() => {
     if (!searchTerm) return;
     const escaped = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const next = document.content.replace(new RegExp(escaped, "gi"), replaceTerm);
+    // 使用函数形式替换，避免 replaceTerm 中的 $&、$1 等被当作替换模式解释
+    const next = document.content.replace(new RegExp(escaped, "gi"), () => replaceTerm);
     if (next !== document.content) onContentChange(next);
   }, [document.content, onContentChange, replaceTerm, searchTerm]);
 
@@ -655,7 +746,7 @@ export default function App() {
         listDirectory={listDirectory}
       />
 
-      <div className={`workspace${sidebarOpen ? " has-sidebar" : ""}`}>
+      <div className={`workspace${sidebarOpen ? " has-sidebar" : ""}`} ref={editorContainerRef}>
         {sourceMode ? (
           <SourceEditor
             key={document.filePath ?? "untitled"}
@@ -682,6 +773,7 @@ export default function App() {
           />
         )}
         <FindReplaceBar
+          t={t}
           open={findReplaceOpen}
           term={searchTerm}
           replacement={replaceTerm}
@@ -717,6 +809,7 @@ export default function App() {
       />
 
       <WordCountModal
+        t={t}
         open={wordCountOpen}
         content={document.content}
         words={wordCount}

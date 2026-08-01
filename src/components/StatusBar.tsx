@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Code2, Focus, MoreHorizontal, PanelLeftClose, PanelLeftOpen, TextCursorInput } from "lucide-react";
 import { IconButton } from "./IconButton";
 import type { AppStrings } from "../lib/i18n";
@@ -24,7 +25,9 @@ type StatusBarProps = {
   onOpenMore: () => void;
 };
 
-export function StatusBar({
+// memo: 光标移动会高频更新 cursor 状态，但只有 line/column 变化时才需重渲染状态栏；
+// 其余无关状态变化（如文档内容）不应触发状态栏重渲染
+export const StatusBar = memo(function StatusBar({
   t,
   sidebarOpen,
   sourceMode,
@@ -84,4 +87,4 @@ export function StatusBar({
       </div>
     </footer>
   );
-}
+});

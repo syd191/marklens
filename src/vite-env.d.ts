@@ -1,6 +1,30 @@
 /// <reference types="vite/client" />
 
 declare module "markdown-it-task-lists";
+declare module "markdown-it-front-matter" {
+  import type MarkdownIt from "markdown-it";
+  const plugin: MarkdownIt.PluginWithOptions<(frontMatter: string) => void>;
+  export default plugin;
+}
+declare module "markdown-it-toc-done-right" {
+  import type MarkdownIt from "markdown-it";
+  import type { PresetName } from "markdown-it";
+  interface TocOptions {
+    placeholder?: string | RegExp;
+    slugify?: (s: string) => string;
+    listType?: "ul" | "ol";
+    level?: number[];
+    containerClass?: string;
+    containerAttrs?: Record<string, string>;
+    listClass?: string;
+    itemClass?: string;
+    linkClass?: string;
+    anchorAttrs?: Record<string, string>;
+    [key: string]: unknown;
+  }
+  const plugin: MarkdownIt.PluginWithOptions<TocOptions>;
+  export default plugin;
+}
 
 type ThemeMode = "system" | "github" | "newsprint" | "night" | "pixyll" | "whitey";
 type ResolvedTheme = "github" | "newsprint" | "night" | "pixyll" | "whitey";

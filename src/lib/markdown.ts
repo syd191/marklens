@@ -2,15 +2,59 @@ import MarkdownIt from "markdown-it";
 import { katex as markdownItKatex } from "@mdit/plugin-katex";
 import markdownItAnchor from "markdown-it-anchor";
 import markdownItTaskLists from "markdown-it-task-lists";
-import hljs from "highlight.js";
+import markdownItFootnote from "markdown-it-footnote";
+import markdownItFrontMatter from "markdown-it-front-matter";
+import markdownItTocDoneRight from "markdown-it-toc-done-right";
+import hljs from "highlight.js/lib/core";
+// 按需注册常用语言，避免全量导入 ~1MB（180+ 语言）。主路径 MDXEditor 用 CodeMirror 高亮，
+// hljs 仅服务于导出 HTML / 复制 HTML，常用语言覆盖足够，未注册的语言回退为纯文本。
+import javascript from "highlight.js/lib/languages/javascript";
+import typescript from "highlight.js/lib/languages/typescript";
+import xml from "highlight.js/lib/languages/xml";
+import css from "highlight.js/lib/languages/css";
+import json from "highlight.js/lib/languages/json";
+import bash from "highlight.js/lib/languages/bash";
+import shell from "highlight.js/lib/languages/shell";
+import python from "highlight.js/lib/languages/python";
+import sql from "highlight.js/lib/languages/sql";
+import markdown from "highlight.js/lib/languages/markdown";
 import type { MarkdownChunk, OutlineItem } from "../types";
+
+hljs.registerLanguage("javascript", javascript);
+hljs.registerLanguage("js", javascript);
+hljs.registerLanguage("jsx", javascript);
+hljs.registerLanguage("typescript", typescript);
+hljs.registerLanguage("ts", typescript);
+hljs.registerLanguage("tsx", typescript);
+hljs.registerLanguage("xml", xml);
+hljs.registerLanguage("html", xml);
+hljs.registerLanguage("css", css);
+hljs.registerLanguage("json", json);
+hljs.registerLanguage("bash", bash);
+hljs.registerLanguage("sh", bash);
+hljs.registerLanguage("shell", shell);
+hljs.registerLanguage("powershell", shell);
+hljs.registerLanguage("python", python);
+hljs.registerLanguage("py", python);
+hljs.registerLanguage("sql", sql);
+hljs.registerLanguage("markdown", markdown);
+hljs.registerLanguage("md", markdown);
 
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
 const FENCE_RE = /^(```|~~~)/;
 const markdownUtils = new MarkdownIt();
 type RenderRule = NonNullable<MarkdownIt["renderer"]["rules"][string]>;
+type MarkdownRenderEnv = {
+  chunkIndex?: number;
+  headingIndex?: number;
+  documentMode?: boolean;
+};
 
-function encodeFileUrlPath(value: string) {
+function hasFrontMatterBlock(lines: string[]): boolean {
+  return lines[0]?.trim() === "---" && lines.slice(1).some((line) => /^(---|\.\.\.)\s*$/.test(line));
+}
+
+export function encodeFileUrlPath(value: string) {
   // markdown-it normalizes spaces to %20 before renderer rules run; decode
   // first so local image paths are not double-encoded to %2520.
   try {
@@ -42,6 +86,7 @@ export function splitMarkdownIntoChunks(markdown: string): MarkdownChunk[] {
   let bufferChars = 0;
   let startLine = 0;
   let inFence = false;
+  let inFrontMatter = hasFrontMatterBlock(lines);
   const maxLines = 140;
   const maxChars = 12000;
 
@@ -53,10 +98,14 @@ export function splitMarkdownIntoChunks(markdown: string): MarkdownChunk[] {
   };
 
   lines.forEach((line, lineIndex) => {
-    const isFence = FENCE_RE.test(line.trim());
+    const isFrontMatterLine = inFrontMatter;
+    if (inFrontMatter && lineIndex > 0 && /^(---|\.\.\.)\s*$/.test(line)) {
+      inFrontMatter = false;
+    }
+    const isFence = !isFrontMatterLine && FENCE_RE.test(line.trim());
     if (isFence) inFence = !inFence;
 
-    const startsHeading = !inFence && HEADING_RE.test(line);
+    const startsHeading = !inFence && !isFrontMatterLine && HEADING_RE.test(line);
     const shouldSplit =
       buffer.length > 0 &&
       (startsHeading || buffer.length >= maxLines || bufferChars >= maxChars);
@@ -80,7 +129,13 @@ export function buildOutline(chunks: MarkdownChunk[]): OutlineItem[] {
   chunks.forEach((chunk) => {
     let inFence = false;
     let localHeadingIndex = 0;
-    chunk.text.split(/\r?\n/).forEach((line, offset) => {
+    const lines = chunk.text.split(/\r?\n/);
+    let inFrontMatter = chunk.index === 0 && hasFrontMatterBlock(lines);
+    lines.forEach((line, offset) => {
+      if (inFrontMatter) {
+        if (offset > 0 && /^(---|\.\.\.)\s*$/.test(line)) inFrontMatter = false;
+        return;
+      }
       if (FENCE_RE.test(line.trim())) {
         inFence = !inFence;
         return;
@@ -126,6 +181,17 @@ export function createMarkdownRenderer(baseDirectory: string | null) {
   md.use(markdownItTaskLists, { enabled: true, label: true, labelAfter: true });
   md.use(markdownItKatex);
   md.use(markdownItAnchor, { permalink: false, slugify });
+  // 脚注渲染：将 [^1] 转换为可点击的脚注引用与文末列表
+  md.use(markdownItFootnote);
+  // 目录渲染：将 [TOC] / [[toc]] 替换为实际目录，标题锚点复用项目 slugify 保持一致
+  md.use(markdownItTocDoneRight, {
+    placeholder: "(\\[TOC\\]|\\[\\[toc\\]\\])",
+    slugify,
+    listType: "ul"
+  });
+  // 使用块级解析插件处理 YAML front matter。它只匹配文档开头完整闭合的
+  // `---` 块，不会被 YAML 内的注释或不同换行符干扰。
+  md.use(markdownItFrontMatter, () => {});
 
   const defaultFence = md.renderer.rules.fence as RenderRule;
   md.renderer.rules.fence = ((tokens, idx, options, env, self) => {
@@ -141,7 +207,10 @@ export function createMarkdownRenderer(baseDirectory: string | null) {
   const defaultHeadingOpen =
     md.renderer.rules.heading_open ??
     (((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options)) as RenderRule);
-  md.renderer.rules.heading_open = ((tokens, idx, options, env: { chunkIndex?: number; headingIndex?: number }, self) => {
+  md.renderer.rules.heading_open = ((tokens, idx, options, env: MarkdownRenderEnv, self) => {
+    // 分块预览需要包含块索引的稳定 ID；整篇文档渲染则保留 anchor
+    // 插件生成的 slug，确保 TOC 链接与标题 ID 一致。
+    if (env.documentMode) return defaultHeadingOpen(tokens, idx, options, env, self);
     const inline = tokens[idx + 1];
     const text = inline?.content ?? "heading";
     const localIndex = env.headingIndex ?? 0;
@@ -180,9 +249,42 @@ export function renderMarkdownChunks(chunks: MarkdownChunk[], baseDirectory: str
 }
 
 export function renderMarkdownDocument(markdown: string, baseDirectory: string | null): string {
-  return renderMarkdownChunks(splitMarkdownIntoChunks(markdown), baseDirectory)
-    .map((chunk) => chunk.html)
-    .join("\n");
+  // TOC、脚注和 front matter 都具有文档级语义，必须在同一次 MarkdownIt
+  // 解析中处理；分块只用于交互式只读预览的渐进渲染。
+  return createMarkdownRenderer(baseDirectory).render(markdown, { documentMode: true });
+}
+
+/**
+ * 将渲染后 HTML 中的 mermaid 占位符（<pre class="mermaid-pending" data-mermaid="...">）
+ * 预渲染为 SVG 字符串，使导出的 HTML 文件自包含、可离线查看。
+ * 在渲染进程调用（mermaid 通过动态 import 加载）。
+ */
+export async function renderMermaidDiagrams(html: string, isDark: boolean): Promise<string> {
+  if (!html.includes("mermaid-pending")) return html;
+  const mermaid = (await import("mermaid")).default;
+  mermaid.initialize({ startOnLoad: false, theme: isDark ? "dark" : "default", securityLevel: "strict" });
+
+  const placeholder = /<pre class="mermaid mermaid-pending" data-mermaid="([^"]*)">[^<]*<\/pre>/g;
+  const matches = Array.from(html.matchAll(placeholder));
+  if (!matches.length) return html;
+
+  const replacements: { original: string; svg: string }[] = [];
+  for (const match of matches) {
+    const original = match[0];
+    const source = decodeURIComponent(match[1]);
+    try {
+      const id = `mermaid-export-${replacements.length}`;
+      const { svg } = await mermaid.render(id, source);
+      replacements.push({ original, svg: `<div class="mermaid-shell">${svg}</div>` });
+    } catch {
+      replacements.push({ original, svg: `<div class="mermaid-shell"><pre>Diagram failed to render.</pre></div>` });
+    }
+  }
+  let result = html;
+  for (const { original, svg } of replacements) {
+    result = result.replace(original, svg);
+  }
+  return result;
 }
 
 export function getWordCount(markdown: string): number {

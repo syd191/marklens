@@ -153,14 +153,15 @@ function insertBlock(
 function clearFormatting(value: string, selection: EditorSelection): EditorTransform {
   const range = selection.start === selection.end ? lineRange(value, selection) : selection;
   const current = value.slice(range.start, range.end);
+  // 清理块级与行内格式，但保留图片和链接的语法结构（只去掉其行内格式），
+  // 避免把 ![alt](url) 降级为纯文本 alt 导致图片丢失（#7）
   const clean = current
     .replace(/^#{1,6}\s+/gm, "")
     .replace(/^>\s?/gm, "")
     .replace(/^(\s*)(?:[-+*]|\d+\.)\s+(?:\[[ xX]\]\s+)?/gm, "$1")
     .replace(/(\*\*|__|~~|`|<u>|<\/u>)/g, "")
     .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1$2")
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, url) => `[${text}](${url})`);
   return replaceSelection(value, range, clean, 0, clean.length);
 }
 

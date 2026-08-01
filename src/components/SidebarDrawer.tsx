@@ -15,7 +15,7 @@ type SidebarDrawerProps = {
   searchMatches: number[];
   onSetTab: (tab: SidebarTab) => void;
   onClose: () => void;
-  onJump: (id: string) => void;
+  onJump: (item: OutlineItem) => void;
   onOpenFolder: () => void;
   onOpenFile: (filePath: string) => void;
   onRootUpdate: (listing: DirectoryListing) => void;
@@ -62,7 +62,7 @@ export function SidebarDrawer({
             {t.drawer.files}
           </button>
           <button type="button" className={tab === "search" ? "is-active" : ""} onClick={() => onSetTab("search")}>
-            搜索
+            {t.drawer.search}
           </button>
         </div>
         <button className="drawer-close" type="button" onClick={onClose} aria-label={t.drawer.closeSidebar}>

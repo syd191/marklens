@@ -15,7 +15,8 @@ MarkLens is an Electron + React desktop app for editing and maintaining Markdown
 3. The normal editing surface parses Markdown into an editable Lexical document and serializes edits back to Markdown.
 4. Source mode applies pure text transformations from `src/lib/editorCommands.ts`.
 5. The read-only preview path still splits long Markdown into chunks and renders later chunks in idle batches.
-6. Mermaid diagrams render only when they approach the viewport.
+6. Export and copy-to-HTML render the complete Markdown source in one parser pass so document-level TOCs, footnotes, and Front Matter remain correct.
+7. Mermaid diagrams render only when they approach the viewport; export resolves them to self-contained SVG.
 
 ## Command Flow
 
@@ -29,13 +30,15 @@ MarkLens is an Electron + React desktop app for editing and maintaining Markdown
 
 - File tree scanning is lazy and directory-based.
 - Outline generation is deferred by default and can be preloaded through the `preloadOutline` preference.
-- Large documents avoid one giant render pass.
+- Interactive read-only previews avoid one giant render pass; document export intentionally uses one pass for document-level syntax correctness.
 - Images use lazy loading.
 - Startup applies the saved/system theme in `index.html` before React loads, reducing light flashes in night mode.
+- Electron IPC listeners are registered once and dispatch through refs to the latest React handlers instead of resubscribing on every edit.
 
 ## Security Boundaries
 
 - Raw Markdown HTML is disabled.
 - Renderer uses `contextIsolation` and Electron sandbox mode.
 - The preload API exposes only specific file/dialog/theme operations.
-- Auto save is off by default and checks file modification time before writing.
+- Auto save is off by default and uses strict modification-time conflict detection before writing.
+- Save completion and automatic external refresh revalidate file path, content, modification time, and save state after asynchronous I/O before applying results.

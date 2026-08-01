@@ -575,9 +575,19 @@ async function createMarkdownFile(parentPath: string): Promise<FileOperationResu
   try {
     await ensureDirectoryPath(parentPath);
     const baseName = getSystemLanguage() === "zh-CN" ? "新建 Markdown" : "New Markdown";
-    const filePath = await getUniqueChildPath(parentPath, baseName, ".md");
-    await fs.promises.writeFile(filePath, "", { encoding: "utf8", flag: "wx" });
-    return { ok: true, path: filePath, parentPath, type: "file" };
+    // getUniqueChildPath 与 writeFile 之间存在 TOCTOU 竞态：并发创建时可能两个调用
+    // 得到相同路径。使用 flag:"wx" 保证原子性，并在 EEXIST 时重试获取新路径（#14）
+    let filePath = await getUniqueChildPath(parentPath, baseName, ".md");
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await fs.promises.writeFile(filePath, "", { encoding: "utf8", flag: "wx" });
+        return { ok: true, path: filePath, parentPath, type: "file" };
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        filePath = await getUniqueChildPath(parentPath, baseName, ".md");
+      }
+    }
+    throw new Error("Unable to create a unique file.");
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : "create-failed" };
   }
@@ -599,6 +609,11 @@ async function renameEntry(targetPath: string, nextName: string): Promise<FileOp
   try {
     const cleanName = nextName.trim();
     if (!isValidEntryName(cleanName)) return { ok: false, reason: "invalid-name" };
+    // 额外拒绝包含路径分隔符的名称，防止 path.join 将其规范化为子路径，
+    // 绕过“同目录重命名”的约束创建子目录文件（#10）
+    if (cleanName.includes("/") || cleanName.includes("\\")) {
+      return { ok: false, reason: "invalid-name" };
+    }
 
     const stat = await fs.promises.stat(targetPath);
     const parentPath = path.dirname(targetPath);
@@ -637,14 +652,23 @@ function watchFile(sender: WebContents, filePath: string | null) {
         const current = fileWatchers.get(sender.id);
         if (!current || current.filePath !== filePath) return;
         if (current.timer) clearTimeout(current.timer);
-        current.timer = setTimeout(async () => {
+        // 记录本次 timer 句柄，回调执行时再次校验未被 stopWatchingFile 清除（#12）
+        const handle = setTimeout(async () => {
+          const entry = fileWatchers.get(sender.id);
+          // 若监听已被切换/关闭，或 timer 已被替换，跳过本次通知
+          if (!entry || entry.filePath !== filePath || entry.timer !== handle) return;
           try {
             const stat = await fs.promises.stat(filePath);
             if (!sender.isDestroyed()) sender.send("file:changed", { filePath, mtimeMs: stat.mtimeMs });
           } catch {
             // Ignore deleted or inaccessible files until the user reopens them.
+          } finally {
+            if (fileWatchers.get(sender.id)?.timer === handle) {
+              fileWatchers.get(sender.id)!.timer = null;
+            }
           }
         }, 350);
+        current.timer = handle;
       }),
       timer: null as NodeJS.Timeout | null
     };
@@ -692,7 +716,9 @@ function registerIpc() {
   ipcMain.handle("file:save", async (_event, payload: SavePayload) => {
     const { filePath, content, expectedMtimeMs, force } = payload;
     const currentStat = await fs.promises.stat(filePath).catch(() => null);
-    if (!force && currentStat && expectedMtimeMs && Math.abs(currentStat.mtimeMs - expectedMtimeMs) > 2) {
+    // 同一文件系统返回的时间戳精度一致，只保留浮点舍入余量。更大的容差会让
+    // 保存前一秒内发生的真实外部修改被静默覆盖。
+    if (!force && currentStat && expectedMtimeMs !== undefined && Math.abs(currentStat.mtimeMs - expectedMtimeMs) > 2) {
       return {
         ok: false,
         reason: "conflict",

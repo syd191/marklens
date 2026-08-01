@@ -1,6 +1,6 @@
 {
   "name": "marklens",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "免费的所见即所得 Markdown 编辑与维护工具。Free WYSIWYG Markdown editor and maintenance tool.",
   "license": "MIT",
   "author": "syd191",
@@ -28,7 +28,10 @@
     "lucide-react": "^0.468.0",
     "markdown-it": "^14.2.0",
     "markdown-it-anchor": "^9.2.0",
+    "markdown-it-footnote": "^3.0.3",
+    "markdown-it-front-matter": "^0.2.4",
     "markdown-it-task-lists": "^2.1.1",
+    "markdown-it-toc-done-right": "^4.2.0",
     "mermaid": "^11.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -37,6 +40,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/markdown-it": "^14.1.2",
+    "@types/markdown-it-footnote": "^3.0.4",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.17",
     "@types/react-dom": "^18.3.5",
