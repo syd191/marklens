@@ -17,17 +17,17 @@ The current project version is **v0.2.1**. Published Windows builds are availabl
 
 ## Screenshots
 
-Document-first reading view:
+MarkLens 0.2.1 document-first WYSIWYG editing view:
 
-![MarkLens reading view](docs/screenshots/reading-night.png)
+![MarkLens 0.2.1 WYSIWYG editing view](docs/screenshots/reading-night.png)
 
-Outline-first navigation:
+MarkLens 0.2.1 outline navigation:
 
-![MarkLens outline view](docs/screenshots/outline-night.png)
+![MarkLens 0.2.1 outline view](docs/screenshots/outline-night.png)
 
-Current-folder file browsing:
+MarkLens 0.2.1 current-folder file browsing:
 
-![MarkLens files view](docs/screenshots/files-night.png)
+![MarkLens 0.2.1 files view](docs/screenshots/files-night.png)
 
 ## What It Does
 

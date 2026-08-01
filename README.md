@@ -17,17 +17,17 @@ MarkLens 的核心体验是“正文优先”：默认隐藏侧栏，打开文�
 
 ## 界面截图
 
-正文优先的阅读界面：
+MarkLens 0.2.1 正文优先的所见即所得编辑界面：
 
-![MarkLens 阅读界面](docs/screenshots/reading-night.png)
+![MarkLens 0.2.1 所见即所得编辑界面](docs/screenshots/reading-night.png)
 
-大纲优先的文档导航：
+MarkLens 0.2.1 大纲导航：
 
-![MarkLens 大纲界面](docs/screenshots/outline-night.png)
+![MarkLens 0.2.1 大纲界面](docs/screenshots/outline-night.png)
 
-当前文件所在目录浏览：
+MarkLens 0.2.1 当前目录文件浏览：
 
-![MarkLens 文件界面](docs/screenshots/files-night.png)
+![MarkLens 0.2.1 文件界面](docs/screenshots/files-night.png)
 
 ## 功能
 
