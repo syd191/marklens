@@ -31,6 +31,7 @@ const recentPaths: string[] = [];
 const isDev = !app.isPackaged;
 const devUrl = "http://127.0.0.1:5173";
 const productName = "MarkLens";
+const projectRepositoryUrl = "https://github.com/syd191/marklens";
 
 type AppLanguage = "zh-CN" | "en-US";
 
@@ -60,7 +61,6 @@ const menuText: Record<AppLanguage, {
   light: string;
   night: string;
   about: string;
-  aboutDetail: string;
   markdownFilter: string;
   folderDialog: string;
   htmlFilter: string;
@@ -91,7 +91,6 @@ const menuText: Record<AppLanguage, {
     light: "浅色",
     night: "夜间",
     about: "关于 MarkLens",
-    aboutDetail: "免费的 Markdown 维护工具。适合阅读、整理、轻量编辑 Markdown 文档，专注打开快、阅读安静、正文优先。",
     markdownFilter: "Markdown 文档",
     folderDialog: "打开文件夹",
     htmlFilter: "HTML 文件"
@@ -122,7 +121,6 @@ const menuText: Record<AppLanguage, {
     light: "Light",
     night: "Night",
     about: "About MarkLens",
-    aboutDetail: "A free Markdown maintenance tool for reading, organizing, and lightly editing Markdown documents with fast opening and a document-first layout.",
     markdownFilter: "Markdown Documents",
     folderDialog: "Open Folder",
     htmlFilter: "HTML Files"
@@ -465,12 +463,7 @@ function createMenu() {
           click: () => {
             const owner = BrowserWindow.getFocusedWindow() ?? mainWindow;
             if (!owner) return;
-            dialog.showMessageBox(owner, {
-              type: "info",
-              title: productName,
-              message: productName,
-              detail: t.aboutDetail
-            });
+            owner.webContents.send("app:command", "about");
           }
         }
       ]
@@ -912,6 +905,10 @@ function registerIpc() {
   });
   ipcMain.handle("theme:get-system", async () => getSystemTheme());
   ipcMain.handle("locale:get-system", async () => app.getLocale());
+  ipcMain.handle("app:open-project-repository", async () => {
+    await shell.openExternal(projectRepositoryUrl);
+    return { ok: true };
+  });
   ipcMain.handle("window:new", async () => {
     createWindow();
     return { ok: true };

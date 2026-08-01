@@ -8,10 +8,10 @@ MarkLens 的核心体验是“正文优先”：默认隐藏侧栏，打开文�
 
 ## 下载
 
-当前项目版本是 **v0.2.1**。已发布的 Windows 构建可从 [Releases 页面](https://github.com/syd191/marklens/releases) 下载；执行 `npm run dist` 时会生成：
+当前项目版本是 **v0.2.2**。已发布的 Windows 构建可从 [Releases 页面](https://github.com/syd191/marklens/releases) 下载；执行 `npm run dist` 时会生成：
 
-- `MarkLens Setup 0.2.1.exe`：安装包。
-- `MarkLens-0.2.1-x64-portable.exe`：便携版。
+- `MarkLens Setup 0.2.2.exe`：安装包。
+- `MarkLens-0.2.2-x64-portable.exe`：便携版。
 
 > Windows 构建目前未进行代码签名，首次运行时可能出现 Microsoft Defender SmartScreen 提示。
 

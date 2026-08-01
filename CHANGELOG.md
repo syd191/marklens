@@ -2,6 +2,16 @@
 
 All notable changes to MarkLens are documented here.
 
+## 0.2.2 - 2026-08-02
+
+### Added
+
+- Add a polished in-app About panel with the MarkLens project identity, GitHub repository link, and a high-correction QR code decorated with the GitHub mark.
+
+### Changed
+
+- Rewrite the About copy around Markdown writing, reading, organization, and maintainability.
+
 ## 0.2.1 - 2026-08-01
 
 ### Fixed

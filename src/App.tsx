@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { FindReplaceBar } from "./components/FindReplaceBar";
+import { AboutModal, PROJECT_REPOSITORY_URL } from "./components/AboutModal";
 import { MoreMenu } from "./components/MoreMenu";
 import { PreferencesModal } from "./components/PreferencesModal";
 import { RichMarkdownEditor, type RichMarkdownEditorHandle } from "./components/RichMarkdownEditor";
@@ -63,6 +64,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [moreOpen, setMoreOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [findReplaceOpen, setFindReplaceOpen] = useState(false);
   const [replaceTerm, setReplaceTerm] = useState("");
   const [focusMode, setFocusMode] = useState(false);
@@ -519,6 +521,7 @@ export default function App() {
       if (command === "export-pdf") actions.exportPdf();
       if (command === "print") window.markdownBridge?.print();
       if (command === "preferences") setPreferencesOpen(true);
+      if (command === "about") setAboutOpen(true);
       if (command === "close-window" || command === "request-close") void actions.requestClose();
       if (command === "find-replace") {
         setSourceMode(true);
@@ -806,6 +809,19 @@ export default function App() {
         preferences={preferences}
         onChange={updatePreferences}
         onClose={() => setPreferencesOpen(false)}
+      />
+
+      <AboutModal
+        t={t}
+        open={aboutOpen}
+        onClose={() => setAboutOpen(false)}
+        onOpenProject={() => {
+          if (window.markdownBridge) {
+            void window.markdownBridge.openProjectRepository();
+            return;
+          }
+          window.open(PROJECT_REPOSITORY_URL, "_blank", "noopener,noreferrer");
+        }}
       />
 
       <WordCountModal

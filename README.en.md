@@ -8,10 +8,10 @@ MarkLens keeps the document first: the sidebar is hidden by default, the outline
 
 ## Download
 
-The current project version is **v0.2.1**. Published Windows builds are available from the [Releases page](https://github.com/syd191/marklens/releases); running `npm run dist` produces:
+The current project version is **v0.2.2**. Published Windows builds are available from the [Releases page](https://github.com/syd191/marklens/releases); running `npm run dist` produces:
 
-- `MarkLens Setup 0.2.1.exe`: installer.
-- `MarkLens-0.2.1-x64-portable.exe`: portable executable.
+- `MarkLens Setup 0.2.2.exe`: installer.
+- `MarkLens-0.2.2-x64-portable.exe`: portable executable.
 
 > Windows builds are currently unsigned, so Microsoft Defender SmartScreen may prompt on first launch.
 

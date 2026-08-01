@@ -96,6 +96,7 @@ type MarkdownBridge = {
   watchFile: (filePath: string | null) => Promise<{ ok: boolean }>;
   getSystemTheme: () => Promise<"light" | "night">;
   getSystemLanguage: () => Promise<string>;
+  openProjectRepository: () => Promise<{ ok: boolean }>;
   createNewWindow: () => Promise<{ ok: boolean }>;
   print: () => Promise<{ ok: boolean; reason?: string }>;
   setFullscreen: (enabled: boolean) => Promise<{ ok: boolean }>;

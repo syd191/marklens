@@ -110,6 +110,15 @@ const zhCN = {
     charactersNoSpaces: "字符（不含空格）",
     paragraphs: "段落",
     lines: "行"
+  },
+  about: {
+    aria: "关于 MarkLens",
+    eyebrow: "MARKLENS",
+    title: "关于 MarkLens",
+    description: "一款为 Markdown 写作、阅读与整理打造的桌面编辑器。让内容结构更清晰，文档维护更从容。",
+    repository: "开源项目地址",
+    scan: "扫描二维码，访问 GitHub 项目主页",
+    qrAlt: "MarkLens GitHub 项目二维码"
   }
 };
 
@@ -223,6 +232,15 @@ const enUS = {
     charactersNoSpaces: "Characters (no spaces)",
     paragraphs: "Paragraphs",
     lines: "Lines"
+  },
+  about: {
+    aria: "About MarkLens",
+    eyebrow: "MARKLENS",
+    title: "About MarkLens",
+    description: "A desktop editor for writing, reading, and organizing Markdown—built to keep documents clear and easy to maintain.",
+    repository: "Open-source repository",
+    scan: "Scan to visit the GitHub project page",
+    qrAlt: "QR code for the MarkLens GitHub project"
   }
 };
 

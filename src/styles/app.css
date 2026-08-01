@@ -1113,6 +1113,189 @@ button {
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.24);
 }
 
+.about-modal {
+  width: min(620px, calc(100vw - 48px));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
+}
+
+.about-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 72px;
+  padding: 13px 14px 13px 22px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.about-eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.about-titlebar h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+.about-titlebar button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+}
+
+.about-titlebar button:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.about-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210px;
+  gap: 26px;
+  align-items: center;
+  padding: 28px 30px 30px;
+}
+
+.about-project-copy {
+  min-width: 0;
+}
+
+.about-app-badge {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  margin: -4px 0 15px -5px;
+  place-items: center;
+}
+
+.about-app-badge img {
+  display: block;
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.22));
+}
+
+.about-description {
+  margin: 0 0 18px;
+  color: var(--text);
+  line-height: 1.7;
+}
+
+.about-repository-label {
+  margin: 0 0 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.about-project-link {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  color: var(--accent);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.about-project-link:hover {
+  text-decoration: underline;
+}
+
+.about-project-link svg {
+  flex: 0 0 auto;
+}
+
+.about-qr-card {
+  display: grid;
+  justify-items: center;
+  gap: 11px;
+  padding: 16px 14px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.about-qr-frame {
+  position: relative;
+  display: grid;
+  width: 158px;
+  height: 158px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #d0d7de;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.about-qr-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.about-qr-loading {
+  color: #57606a;
+}
+
+.about-qr-mark {
+  position: absolute;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 3px solid #ffffff;
+  border-radius: 11px;
+  color: #ffffff;
+  background: #24292f;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+}
+
+.about-qr-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  .about-content {
+    grid-template-columns: 1fr;
+    padding: 22px;
+  }
+
+  .about-qr-card {
+    grid-template-columns: auto minmax(0, 1fr);
+    justify-items: start;
+    width: 100%;
+  }
+
+  .about-qr-card p {
+    text-align: left;
+  }
+}
+
 .word-count-modal header {
   display: flex;
   align-items: center;

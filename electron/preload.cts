@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld("markdownBridge", {
   watchFile: (filePath: string | null) => ipcRenderer.invoke("file:watch", filePath),
   getSystemTheme: () => ipcRenderer.invoke("theme:get-system"),
   getSystemLanguage: () => ipcRenderer.invoke("locale:get-system"),
+  openProjectRepository: () => ipcRenderer.invoke("app:open-project-repository"),
   createNewWindow: () => ipcRenderer.invoke("window:new"),
   print: () => ipcRenderer.invoke("window:print"),
   setFullscreen: (enabled: boolean) => ipcRenderer.invoke("window:set-fullscreen", enabled),
