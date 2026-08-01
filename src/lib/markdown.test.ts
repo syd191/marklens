@@ -39,4 +39,25 @@ describe("markdown rendering", () => {
   it("counts CJK characters and Latin words", () => {
     expect(getWordCount("中文 test words")).toBe(4);
   });
+
+  it("renders footnotes into a footnote list", () => {
+    const html = renderMarkdownDocument("Text with a note[^1].\n\n[^1]: Footnote body", null);
+    expect(html).toMatch(/<sup[^>]*class="footnote-ref"/);
+    expect(html).toContain("Footnote body");
+  });
+
+  it("replaces [TOC] placeholder with a table of contents", () => {
+    const html = renderMarkdownDocument("[TOC]\n\n# One\n\n## Two", null);
+    expect(html).toContain('class="table-of-contents"');
+    expect(html).toContain(">One<");
+    expect(html).toContain(">Two<");
+  });
+
+  it("strips YAML front-matter before rendering", () => {
+    const html = renderMarkdownDocument("---\ntitle: Hello\n---\n\n# Body", null);
+    expect(html).not.toContain("title: Hello");
+    expect(html).not.toContain("<hr");
+    expect(html).toContain("<h1");
+    expect(html).toContain("Body");
+  });
 });

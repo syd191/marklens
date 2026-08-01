@@ -42,6 +42,7 @@ import {
   UNDO_COMMAND
 } from "lexical";
 import { stripMarkdown } from "../lib/editorCommands";
+import { encodeFileUrlPath } from "../lib/markdown";
 
 export type RichMarkdownEditorHandle = {
   execute: (command: string) => boolean;
@@ -65,7 +66,8 @@ type RichMarkdownEditorProps = {
 function resolveImageSource(source: string, baseDirectory: string | null) {
   if (!baseDirectory || /^(https?:|file:|data:|#)/i.test(source)) return source;
   const normalized = `${baseDirectory.replace(/\\/g, "/").replace(/\/$/, "")}/${source.replace(/^\.\//, "")}`;
-  return `file:///${encodeURI(normalized)}`;
+  // 与 markdown.ts 的预览渲染保持一致的编码逻辑，避免已编码路径被二次编码（#9）
+  return `file:///${encodeFileUrlPath(normalized)}`;
 }
 
 function RichCommandBridge({ channel }: { channel: MutableRefObject<CommandChannel> }) {

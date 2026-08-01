@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import {
   applyMarkdownCommand,
   moveSelectedLines,
@@ -50,18 +50,30 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(fu
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const undoStackRef = useRef<string[]>([]);
   const redoStackRef = useRef<string[]>([]);
+  // rAF 句柄，用于节流 onSelect 高频触发的光标回调，避免大文档拖选时频繁 split
+  const cursorRafRef = useRef<number | null>(null);
 
   const reportCursor = useCallback(() => {
-    const target = textareaRef.current;
-    if (!target) return;
-    onCursorChange(getCursorPosition(value, target.selectionStart, target.selectionEnd));
+    // 用 rAF 合并同一帧内多次 onSelect/onClick/onKeyUp，只在下一帧计算一次光标位置
+    if (cursorRafRef.current !== null) return;
+    cursorRafRef.current = window.requestAnimationFrame(() => {
+      cursorRafRef.current = null;
+      const target = textareaRef.current;
+      if (!target) return;
+      onCursorChange(getCursorPosition(value, target.selectionStart, target.selectionEnd));
 
-    if (typewriterMode) {
-      const lineHeight = Math.max(13, fontSize - 1) * 1.62;
-      const line = value.slice(0, target.selectionStart).split("\n").length - 1;
-      target.scrollTop = Math.max(0, line * lineHeight - target.clientHeight * 0.45);
-    }
+      if (typewriterMode) {
+        const lineHeight = Math.max(13, fontSize - 1) * 1.62;
+        const line = value.slice(0, target.selectionStart).split("\n").length - 1;
+        target.scrollTop = Math.max(0, line * lineHeight - target.clientHeight * 0.45);
+      }
+    });
   }, [fontSize, onCursorChange, typewriterMode, value]);
+
+  // 卸载时取消可能挂起的 rAF
+  useEffect(() => () => {
+    if (cursorRafRef.current !== null) window.cancelAnimationFrame(cursorRafRef.current);
+  }, []);
 
   const selectRange = useCallback((start: number, end: number) => {
     window.requestAnimationFrame(() => {
@@ -80,7 +92,8 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(fu
     }
     if (recordHistory) {
       undoStackRef.current.push(value);
-      if (undoStackRef.current.length > 200) undoStackRef.current.shift();
+      // 上限 100：大文档下全量快照占内存，100 步已足够覆盖常规撤销需求
+      if (undoStackRef.current.length > 100) undoStackRef.current.shift();
       redoStackRef.current = [];
     }
     onChange(next);
@@ -131,16 +144,20 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(fu
       const previous = undoStackRef.current.pop();
       if (previous === undefined) return;
       redoStackRef.current.push(value);
+      // 注意：undo 不清空 redo 栈（标准 undo/redo 语义），后续新输入才会清空。
+      // 光标定位到 previous 内容范围内，避免越界。
+      const cursor = Math.min(previous.length, target.selectionStart);
       onChange(previous);
-      selectRange(Math.min(previous.length, target.selectionStart), Math.min(previous.length, target.selectionStart));
+      selectRange(cursor, cursor);
       return;
     }
     if (command === "redo") {
       const next = redoStackRef.current.pop();
       if (next === undefined) return;
       undoStackRef.current.push(value);
+      const cursor = Math.min(next.length, target.selectionStart);
       onChange(next);
-      selectRange(Math.min(next.length, target.selectionStart), Math.min(next.length, target.selectionStart));
+      selectRange(cursor, cursor);
       return;
     }
     if (command === "select-all") {
@@ -246,7 +263,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(fu
         onChange={(event) => {
           if (event.target.value !== value) {
             undoStackRef.current.push(value);
-            if (undoStackRef.current.length > 200) undoStackRef.current.shift();
+            if (undoStackRef.current.length > 100) undoStackRef.current.shift();
             redoStackRef.current = [];
           }
           onChange(event.target.value);

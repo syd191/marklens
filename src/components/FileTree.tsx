@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { AppStrings } from "../lib/i18n";
 
 type FileTreeProps = {
@@ -52,6 +52,9 @@ export function FileTree({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [childrenByPath, setChildrenByPath] = useState<DirectoryState>({});
   const [filter, setFilter] = useState("");
+  // 用 deferred 延迟过滤计算，让输入框始终保持响应；快速输入时过滤结果稍后更新
+  const deferredFilter = useDeferredValue(filter);
+  const filterLower = useMemo(() => deferredFilter.toLowerCase(), [deferredFilter]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [renamingValue, setRenamingValue] = useState("");
@@ -207,7 +210,7 @@ export function FileTree({
   };
 
   const renderChildren = (items: DirectoryChild[], depth = 0) => {
-    const visible = items.filter((item) => !filter || item.name.toLowerCase().includes(filter.toLowerCase()));
+    const visible = items.filter((item) => !filterLower || item.name.toLowerCase().includes(filterLower));
     return visible.map((item) => {
       const isDir = item.type === "directory";
       const isOpen = expanded.has(item.path);

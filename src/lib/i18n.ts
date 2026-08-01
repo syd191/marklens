@@ -44,6 +44,7 @@ const zhCN = {
     aria: "侧栏",
     outline: "大纲",
     files: "文件",
+    search: "搜索",
     closeSidebar: "关闭侧栏",
     searchDocument: "搜索当前文档",
     line: (line: number) => `第 ${line} 行`,
@@ -90,6 +91,25 @@ const zhCN = {
     delay500: "500 毫秒",
     delay1000: "1 秒",
     delay3000: "3 秒"
+  },
+  findReplace: {
+    aria: "查找和替换",
+    find: "查找",
+    replaceWith: "替换为",
+    matchCount: (count: number) => `${count} 处`,
+    previous: "上一个",
+    next: "下一个",
+    replace: "替换",
+    replaceAll: "全部"
+  },
+  wordCount: {
+    aria: "字数统计",
+    title: "字数统计",
+    words: "字/词",
+    charactersWithSpaces: "字符（含空格）",
+    charactersNoSpaces: "字符（不含空格）",
+    paragraphs: "段落",
+    lines: "行"
   }
 };
 
@@ -137,6 +157,7 @@ const enUS = {
     aria: "Sidebar",
     outline: "Outline",
     files: "Files",
+    search: "Search",
     closeSidebar: "Close sidebar",
     searchDocument: "Search document",
     line: (line: number) => `Line ${line}`,
@@ -183,6 +204,25 @@ const enUS = {
     delay500: "500 ms",
     delay1000: "1 second",
     delay3000: "3 seconds"
+  },
+  findReplace: {
+    aria: "Find and replace",
+    find: "Find",
+    replaceWith: "Replace with",
+    matchCount: (count: number) => `${count} matches`,
+    previous: "Previous",
+    next: "Next",
+    replace: "Replace",
+    replaceAll: "All"
+  },
+  wordCount: {
+    aria: "Word count",
+    title: "Word Count",
+    words: "Words",
+    charactersWithSpaces: "Characters (with spaces)",
+    charactersNoSpaces: "Characters (no spaces)",
+    paragraphs: "Paragraphs",
+    lines: "Lines"
   }
 };
 

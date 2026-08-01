@@ -1,7 +1,9 @@
 import { ChevronDown, ChevronUp, Replace, X } from "lucide-react";
 import { useEffect, useRef } from "react";
+import type { AppStrings } from "../lib/i18n";
 
 type FindReplaceBarProps = {
+  t: AppStrings;
   open: boolean;
   term: string;
   replacement: string;
@@ -15,6 +17,7 @@ type FindReplaceBarProps = {
 };
 
 export function FindReplaceBar({
+  t,
   open,
   term,
   replacement,
@@ -35,46 +38,46 @@ export function FindReplaceBar({
   if (!open) return null;
 
   return (
-    <section className="find-replace-bar" aria-label="查找和替换">
+    <section className="find-replace-bar" aria-label={t.findReplace.aria}>
       <div className="find-row">
         <input
           ref={inputRef}
           value={term}
-          placeholder="查找"
-          aria-label="查找"
+          placeholder={t.findReplace.find}
+          aria-label={t.findReplace.find}
           onChange={(event) => onTermChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") onFind(event.shiftKey);
             if (event.key === "Escape") onClose();
           }}
         />
-        <span className="find-count">{term ? `${matchCount} 处` : ""}</span>
-        <button type="button" title="上一个" onClick={() => onFind(true)}>
+        <span className="find-count">{term ? t.findReplace.matchCount(matchCount) : ""}</span>
+        <button type="button" title={t.findReplace.previous} onClick={() => onFind(true)}>
           <ChevronUp size={15} />
         </button>
-        <button type="button" title="下一个" onClick={() => onFind(false)}>
+        <button type="button" title={t.findReplace.next} onClick={() => onFind(false)}>
           <ChevronDown size={15} />
         </button>
-        <button type="button" title="关闭" onClick={onClose}>
+        <button type="button" title={t.common.close} onClick={onClose}>
           <X size={15} />
         </button>
       </div>
       <div className="find-row">
         <input
           value={replacement}
-          placeholder="替换为"
-          aria-label="替换为"
+          placeholder={t.findReplace.replaceWith}
+          aria-label={t.findReplace.replaceWith}
           onChange={(event) => onReplacementChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") onReplace();
             if (event.key === "Escape") onClose();
           }}
         />
-        <button type="button" className="replace-button" title="替换" onClick={onReplace}>
-          <Replace size={14} /> 替换
+        <button type="button" className="replace-button" title={t.findReplace.replace} onClick={onReplace}>
+          <Replace size={14} /> {t.findReplace.replace}
         </button>
         <button type="button" className="replace-button" onClick={onReplaceAll}>
-          全部
+          {t.findReplace.replaceAll}
         </button>
       </div>
     </section>

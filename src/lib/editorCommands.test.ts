@@ -33,4 +33,11 @@ describe("editor commands", () => {
       "Hello world\ntask\nlink"
     );
   });
+
+  it("clear-format preserves images and links while removing inline formatting", () => {
+    const source = "# Title\n**bold** ![alt text](image.png) [link](https://example.com)";
+    const result = applyMarkdownCommand(source, { start: 0, end: source.length }, "clear-format");
+    // 标题和加粗被清理，但图片和链接语法保留
+    expect(result.value).toBe("Title\nbold ![alt text](image.png) [link](https://example.com)");
+  });
 });
