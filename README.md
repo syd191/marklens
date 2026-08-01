@@ -8,10 +8,12 @@ MarkLens 的核心体验是“正文优先”：默认隐藏侧栏，打开文�
 
 ## 下载
 
-Windows 版本可在 [v0.1.0 Release](https://github.com/syd191/marklens/releases/tag/v0.1.0) 下载：
+当前项目版本是 **v0.2.1**。已发布的 Windows 构建可从 [Releases 页面](https://github.com/syd191/marklens/releases) 下载；执行 `npm run dist` 时会生成：
 
-- `MarkLens.Setup.0.1.0.exe`：安装包。
-- `MarkLens-0.1.0-x64-portable.exe`：便携版。
+- `MarkLens Setup 0.2.1.exe`：安装包。
+- `MarkLens-0.2.1-x64-portable.exe`：便携版。
+
+> Windows 构建目前未进行代码签名，首次运行时可能出现 Microsoft Defender SmartScreen 提示。
 
 ## 界面截图
 
@@ -51,6 +53,9 @@ Windows 版本可在 [v0.1.0 Release](https://github.com/syd191/marklens/release
 - 链接
 - KaTeX 数学公式
 - Mermaid 图表
+- 脚注
+- 文档目录（`[TOC]` / `[[toc]]`）
+- YAML Front Matter
 
 ## 性能设计
 
@@ -58,8 +63,9 @@ MarkLens 以快速打开和流畅浏览 Markdown 为目标：
 
 - 主窗口等首屏 UI 准备好后再显示，减少启动白屏。
 - 初始 HTML 会提前应用保存的主题或系统主题，减少主题闪烁。
-- 长 Markdown 文档按块处理。
+- 长 Markdown 文档的交互式只读预览按块处理。
 - 先渲染首屏内容，剩余内容在空闲时间继续渲染。
+- 导出和复制 HTML 时整篇解析一次，保证目录、脚注和 Front Matter 的文档级语义正确。
 - 大纲默认延后生成，在需要时再计算。
 - Mermaid 图表靠近可视区域后再渲染。
 - 文件树按目录懒加载，展开目录时再读取子项。
@@ -69,7 +75,8 @@ MarkLens 以快速打开和流畅浏览 Markdown 为目标：
 - Markdown 中的原始 HTML 默认转义。
 - Electron 开启 context isolation 和 sandbox。
 - 文件访问限制在 Markdown 类文本文件。
-- 自动保存是可选项，并在写入前检查文件修改时间，避免静默覆盖冲突。
+- 自动保存是可选项，并在写入前严格检查文件修改时间，避免静默覆盖外部修改。
+- 保存和自动刷新完成后会再次核对当前文档快照，避免异步操作覆盖用户刚输入的内容。
 
 ## 开发
 
@@ -111,10 +118,11 @@ npm run dist
 - `src/components/RichMarkdownEditor.tsx`：所见即所得 Markdown 编辑器和编辑命令桥接。
 - `src/components/SourceEditor.tsx`：源码编辑器、历史记录、查找和选区操作。
 - `src/lib/editorCommands.ts`：可测试的 Markdown 文本命令。
-- `src/lib/markdown.ts`：Markdown 分块、大纲提取和预览渲染。
+- `src/lib/markdown.ts`：Markdown 分块、大纲提取、渐进预览和整篇文档渲染。
 - `src/lib/i18n.ts`：中英文界面文案和语言解析。
 - `assets/`：应用图标源文件。
 - `docs/`：架构和维护说明。
+- `CHANGELOG.md`：版本变更记录。
 
 ## 许可证
 

@@ -716,8 +716,9 @@ function registerIpc() {
   ipcMain.handle("file:save", async (_event, payload: SavePayload) => {
     const { filePath, content, expectedMtimeMs, force } = payload;
     const currentStat = await fs.promises.stat(filePath).catch(() => null);
-    // 使用 1000ms 容差以兼容 FAT32（2s 精度）等低精度文件系统，避免保存后立即被误判为冲突
-    if (!force && currentStat && expectedMtimeMs && Math.abs(currentStat.mtimeMs - expectedMtimeMs) > 1000) {
+    // 同一文件系统返回的时间戳精度一致，只保留浮点舍入余量。更大的容差会让
+    // 保存前一秒内发生的真实外部修改被静默覆盖。
+    if (!force && currentStat && expectedMtimeMs !== undefined && Math.abs(currentStat.mtimeMs - expectedMtimeMs) > 2) {
       return {
         ok: false,
         reason: "conflict",

@@ -60,15 +60,16 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(fu
       cursorRafRef.current = null;
       const target = textareaRef.current;
       if (!target) return;
-      onCursorChange(getCursorPosition(value, target.selectionStart, target.selectionEnd));
+      const currentValue = target.value;
+      onCursorChange(getCursorPosition(currentValue, target.selectionStart, target.selectionEnd));
 
       if (typewriterMode) {
         const lineHeight = Math.max(13, fontSize - 1) * 1.62;
-        const line = value.slice(0, target.selectionStart).split("\n").length - 1;
+        const line = currentValue.slice(0, target.selectionStart).split("\n").length - 1;
         target.scrollTop = Math.max(0, line * lineHeight - target.clientHeight * 0.45);
       }
     });
-  }, [fontSize, onCursorChange, typewriterMode, value]);
+  }, [fontSize, onCursorChange, typewriterMode]);
 
   // 卸载时取消可能挂起的 rAF
   useEffect(() => () => {

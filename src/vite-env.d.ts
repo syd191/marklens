@@ -1,6 +1,11 @@
 /// <reference types="vite/client" />
 
 declare module "markdown-it-task-lists";
+declare module "markdown-it-front-matter" {
+  import type MarkdownIt from "markdown-it";
+  const plugin: MarkdownIt.PluginWithOptions<(frontMatter: string) => void>;
+  export default plugin;
+}
 declare module "markdown-it-toc-done-right" {
   import type MarkdownIt from "markdown-it";
   import type { PresetName } from "markdown-it";

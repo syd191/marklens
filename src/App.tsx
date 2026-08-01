@@ -209,47 +209,62 @@ export default function App() {
   const saveCurrentFile = useCallback(
     async (force = false) => {
       if (!document.filePath) return false;
+      const snapshot = {
+        filePath: document.filePath,
+        content: document.content,
+        mtimeMs: document.mtimeMs,
+        name: document.name
+      };
+      const setSnapshotStatus = (status: SaveStatus) => {
+        if (documentRef.current.filePath === snapshot.filePath) setSaveStatus(status);
+      };
+      const completeSnapshotSave = (mtimeMs: number) => {
+        const latest = documentRef.current;
+        const isStillCurrent = latest.filePath === snapshot.filePath && latest.content === snapshot.content;
+        setDocument((current) =>
+          current.filePath === snapshot.filePath ? { ...current, mtimeMs } : current
+        );
+        setSnapshotStatus(isStillCurrent ? "saved" : "unsaved");
+        return isStillCurrent;
+      };
+
       setSaveStatus("saving");
       try {
         const result = await window.markdownBridge?.saveFile({
-          filePath: document.filePath,
-          content: document.content,
-          expectedMtimeMs: document.mtimeMs,
+          filePath: snapshot.filePath,
+          content: snapshot.content,
+          expectedMtimeMs: snapshot.mtimeMs,
           force
         });
         if (result?.ok) {
-          setDocument((current) => ({ ...current, mtimeMs: result.mtimeMs }));
-          setSaveStatus("saved");
-          return true;
+          return completeSnapshotSave(result.mtimeMs);
         } else if (result?.reason === "conflict") {
-          setSaveStatus("conflict");
-          const resolution = await window.markdownBridge?.resolveSaveConflict(document.name || null) ?? "cancel";
+          setSnapshotStatus("conflict");
+          const resolution = await window.markdownBridge?.resolveSaveConflict(snapshot.name || null) ?? "cancel";
           if (resolution === "overwrite") {
             const forced = await window.markdownBridge?.saveFile({
-              filePath: document.filePath,
-              content: document.content,
+              filePath: snapshot.filePath,
+              content: snapshot.content,
               expectedMtimeMs: result.mtimeMs,
               force: true
             });
             if (forced?.ok) {
-              setDocument((current) => ({ ...current, mtimeMs: forced.mtimeMs }));
-              setSaveStatus("saved");
-              return true;
+              return completeSnapshotSave(forced.mtimeMs);
             }
-            setSaveStatus("failed");
+            setSnapshotStatus("failed");
           } else if (resolution === "reload") {
-            const payload = await window.markdownBridge?.readFile(document.filePath);
-            if (payload) {
+            const payload = await window.markdownBridge?.readFile(snapshot.filePath);
+            if (payload && documentRef.current.filePath === snapshot.filePath) {
               openFilePayload(payload);
               return true;
             }
-            setSaveStatus("failed");
+            setSnapshotStatus("failed");
           }
         } else {
-          setSaveStatus("failed");
+          setSnapshotStatus("failed");
         }
       } catch {
-        setSaveStatus("failed");
+        setSnapshotStatus("failed");
       }
       return false;
     },
@@ -430,9 +445,33 @@ export default function App() {
     });
   }, []);
 
+  // IPC 监听只注册一次；每次事件触发时再读取最新操作，避免输入过程中因
+  // document 变化反复解除/注册 Electron 监听器。
+  const ipcActions = {
+    createNewDocument,
+    deleteCurrentFile,
+    exportHtml,
+    exportPdf,
+    language,
+    moveCurrentFile,
+    openFileDialog,
+    openFolderDialog,
+    openFilePayload,
+    openPath,
+    requestClose,
+    runEditorCommand,
+    saveAs,
+    saveCurrentFile,
+    showInFolder,
+    showProperties,
+    updatePreferences
+  };
+  const ipcActionsRef = useRef(ipcActions);
+  ipcActionsRef.current = ipcActions;
+
   useEffect(() => {
     const offTheme = window.markdownBridge?.onSystemThemeChanged((theme) => setSystemTheme(theme === "night" ? "night" : "github"));
-    const offOpenPath = window.markdownBridge?.onOpenPath(openPath);
+    const offOpenPath = window.markdownBridge?.onOpenPath((filePath) => ipcActionsRef.current.openPath(filePath));
     // 文件外部变化通知：通过 ref 读取最新的 document/saveStatus/preferences，
     // 避免把这些易变值放入依赖数组导致监听器频繁重订阅（#15、#3）
     const offChanged = window.markdownBridge?.onFileChanged(async ({ filePath, mtimeMs }) => {
@@ -443,35 +482,44 @@ export default function App() {
       if (currentStatus !== "clean" && currentStatus !== "saved") return;
       if (currentDoc.mtimeMs && Math.abs(currentDoc.mtimeMs - mtimeMs) < 2) return;
       const payload = await window.markdownBridge?.readFile(filePath);
-      // 异步读取期间文件可能已被用户切换，再次校验
-      if (documentRef.current.filePath !== filePath) return;
-      if (payload) openFilePayload(payload);
+      // 异步读取期间用户可能切换文件或开始编辑。只有文档、内容、mtime 与
+      // 保存状态都仍是读取前快照时，才允许应用外部内容。
+      const latestDoc = documentRef.current;
+      const latestStatus = saveStatusRef.current;
+      if (
+        latestDoc.filePath !== currentDoc.filePath ||
+        latestDoc.content !== currentDoc.content ||
+        latestDoc.mtimeMs !== currentDoc.mtimeMs ||
+        (latestStatus !== "clean" && latestStatus !== "saved")
+      ) return;
+      if (payload) ipcActionsRef.current.openFilePayload(payload);
     });
 
     // 命令通道：同样通过 ref 读取最新的 preferences/document，避免重订阅（#15）
     const offCommand = window.markdownBridge?.onCommand((command) => {
+      const actions = ipcActionsRef.current;
       const currentDoc = documentRef.current;
       const currentPrefs = preferencesRef.current;
-      if (command === "new") void createNewDocument();
+      if (command === "new") void actions.createNewDocument();
       if (command === "new-window") window.markdownBridge?.createNewWindow();
-      if (command === "open-file") openFileDialog();
-      if (command === "quick-open" || command === "import") openFileDialog();
-      if (command === "open-folder") openFolderDialog();
+      if (command === "open-file") actions.openFileDialog();
+      if (command === "quick-open" || command === "import") actions.openFileDialog();
+      if (command === "open-folder") actions.openFolderDialog();
       if (command === "save") {
-        if (currentDoc.filePath) void saveCurrentFile();
-        else void saveAs();
+        if (currentDoc.filePath) void actions.saveCurrentFile();
+        else void actions.saveAs();
       }
-      if (command === "save-as") saveAs();
-      if (command === "move-to") moveCurrentFile();
-      if (command === "save-all") saveCurrentFile();
-      if (command === "properties") showProperties();
-      if (command === "show-in-folder" && currentDoc.filePath) showInFolder(currentDoc.filePath);
-      if (command === "delete-file") deleteCurrentFile();
-      if (command === "export-html") exportHtml();
-      if (command === "export-pdf") exportPdf();
+      if (command === "save-as") actions.saveAs();
+      if (command === "move-to") actions.moveCurrentFile();
+      if (command === "save-all") actions.saveCurrentFile();
+      if (command === "properties") actions.showProperties();
+      if (command === "show-in-folder" && currentDoc.filePath) actions.showInFolder(currentDoc.filePath);
+      if (command === "delete-file") actions.deleteCurrentFile();
+      if (command === "export-html") actions.exportHtml();
+      if (command === "export-pdf") actions.exportPdf();
       if (command === "print") window.markdownBridge?.print();
       if (command === "preferences") setPreferencesOpen(true);
-      if (command === "close-window" || command === "request-close") void requestClose();
+      if (command === "close-window" || command === "request-close") void actions.requestClose();
       if (command === "find-replace") {
         setSourceMode(true);
         setFindReplaceOpen(true);
@@ -512,17 +560,17 @@ export default function App() {
         });
       }
       if (command === "toggle-spellcheck") {
-        updatePreferences({ ...currentPrefs, spellCheck: !currentPrefs.spellCheck });
+        actions.updatePreferences({ ...currentPrefs, spellCheck: !currentPrefs.spellCheck });
       }
       if (command === "emoji") {
-        window.alert(language === "zh-CN" ? "请按 Win + . 打开 Windows 表情与符号面板。" : "Press Win + . to open the Windows emoji and symbols panel.");
+        window.alert(actions.language === "zh-CN" ? "请按 Win + . 打开 Windows 表情与符号面板。" : "Press Win + . to open the Windows emoji and symbols panel.");
       }
-      if (command === "theme-system") updatePreferences({ ...currentPrefs, themeMode: "system" });
-      if (command === "theme-github") updatePreferences({ ...currentPrefs, themeMode: "github" });
-      if (command === "theme-newsprint") updatePreferences({ ...currentPrefs, themeMode: "newsprint" });
-      if (command === "theme-night") updatePreferences({ ...currentPrefs, themeMode: "night" });
-      if (command === "theme-pixyll") updatePreferences({ ...currentPrefs, themeMode: "pixyll" });
-      if (command === "theme-whitey") updatePreferences({ ...currentPrefs, themeMode: "whitey" });
+      if (command === "theme-system") actions.updatePreferences({ ...currentPrefs, themeMode: "system" });
+      if (command === "theme-github") actions.updatePreferences({ ...currentPrefs, themeMode: "github" });
+      if (command === "theme-newsprint") actions.updatePreferences({ ...currentPrefs, themeMode: "newsprint" });
+      if (command === "theme-night") actions.updatePreferences({ ...currentPrefs, themeMode: "night" });
+      if (command === "theme-pixyll") actions.updatePreferences({ ...currentPrefs, themeMode: "pixyll" });
+      if (command === "theme-whitey") actions.updatePreferences({ ...currentPrefs, themeMode: "whitey" });
 
       const editorCommands = new Set([
         "undo", "redo", "copy-plain", "copy-markdown", "copy-html", "paste-plain",
@@ -535,7 +583,7 @@ export default function App() {
         "footnote", "horizontal-rule", "toc", "front-matter", "bold", "italic", "underline",
         "inline-code", "strikethrough", "comment", "link", "image", "clear-format"
       ]);
-      if (editorCommands.has(command)) runEditorCommand(command);
+      if (editorCommands.has(command)) actions.runEditorCommand(command);
     });
 
     if (!rendererReadySent.current) {
@@ -549,27 +597,7 @@ export default function App() {
       offChanged?.();
       offCommand?.();
     };
-    // 依赖数组仅保留会改变回调行为的稳定函数引用；document/saveStatus/preferences
-    // 通过 ref 读取，不再触发重订阅。language 是派生值，同样不放入。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    createNewDocument,
-    deleteCurrentFile,
-    exportHtml,
-    exportPdf,
-    moveCurrentFile,
-    openFileDialog,
-    openFolderDialog,
-    openFilePayload,
-    openPath,
-    requestClose,
-    runEditorCommand,
-    saveAs,
-    saveCurrentFile,
-    showInFolder,
-    showProperties,
-    updatePreferences
-  ]);
+  }, []);
 
   useDebouncedEffect(
     () => {

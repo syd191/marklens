@@ -8,6 +8,8 @@ Before submitting changes, run:
 npm run check
 ```
 
+Markdown rendering changes must cover document-level behavior, including TOC links matching heading IDs, footnotes whose definitions appear in later sections, and Front Matter with CRLF line endings or YAML comments.
+
 For UI or Electron behavior changes, also build and smoke-test a packaged app:
 
 ```bash
@@ -21,7 +23,9 @@ Open the generated portable executable with a real `.md` file and verify:
 - Files tab opens the current Markdown file's directory when a document is open.
 - Files tab does not scan unrelated folders unless a folder is opened explicitly.
 - Source mode opens and edits text.
+- WYSIWYG/source round trips preserve tables, task lists, links, footnotes, TOCs, and Front Matter.
 - Preferences opens and auto save remains off by default.
+- External file changes never replace an unsaved editor buffer; an actual modification-time conflict prompts instead of silently overwriting the disk file.
 - Light, Night, and Follow System themes work.
 
 ## Code Style

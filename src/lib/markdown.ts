@@ -3,6 +3,7 @@ import { katex as markdownItKatex } from "@mdit/plugin-katex";
 import markdownItAnchor from "markdown-it-anchor";
 import markdownItTaskLists from "markdown-it-task-lists";
 import markdownItFootnote from "markdown-it-footnote";
+import markdownItFrontMatter from "markdown-it-front-matter";
 import markdownItTocDoneRight from "markdown-it-toc-done-right";
 import hljs from "highlight.js/lib/core";
 // 按需注册常用语言，避免全量导入 ~1MB（180+ 语言）。主路径 MDXEditor 用 CodeMirror 高亮，
@@ -43,6 +44,15 @@ const HEADING_RE = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
 const FENCE_RE = /^(```|~~~)/;
 const markdownUtils = new MarkdownIt();
 type RenderRule = NonNullable<MarkdownIt["renderer"]["rules"][string]>;
+type MarkdownRenderEnv = {
+  chunkIndex?: number;
+  headingIndex?: number;
+  documentMode?: boolean;
+};
+
+function hasFrontMatterBlock(lines: string[]): boolean {
+  return lines[0]?.trim() === "---" && lines.slice(1).some((line) => /^(---|\.\.\.)\s*$/.test(line));
+}
 
 export function encodeFileUrlPath(value: string) {
   // markdown-it normalizes spaces to %20 before renderer rules run; decode
@@ -76,6 +86,7 @@ export function splitMarkdownIntoChunks(markdown: string): MarkdownChunk[] {
   let bufferChars = 0;
   let startLine = 0;
   let inFence = false;
+  let inFrontMatter = hasFrontMatterBlock(lines);
   const maxLines = 140;
   const maxChars = 12000;
 
@@ -87,10 +98,14 @@ export function splitMarkdownIntoChunks(markdown: string): MarkdownChunk[] {
   };
 
   lines.forEach((line, lineIndex) => {
-    const isFence = FENCE_RE.test(line.trim());
+    const isFrontMatterLine = inFrontMatter;
+    if (inFrontMatter && lineIndex > 0 && /^(---|\.\.\.)\s*$/.test(line)) {
+      inFrontMatter = false;
+    }
+    const isFence = !isFrontMatterLine && FENCE_RE.test(line.trim());
     if (isFence) inFence = !inFence;
 
-    const startsHeading = !inFence && HEADING_RE.test(line);
+    const startsHeading = !inFence && !isFrontMatterLine && HEADING_RE.test(line);
     const shouldSplit =
       buffer.length > 0 &&
       (startsHeading || buffer.length >= maxLines || bufferChars >= maxChars);
@@ -114,7 +129,13 @@ export function buildOutline(chunks: MarkdownChunk[]): OutlineItem[] {
   chunks.forEach((chunk) => {
     let inFence = false;
     let localHeadingIndex = 0;
-    chunk.text.split(/\r?\n/).forEach((line, offset) => {
+    const lines = chunk.text.split(/\r?\n/);
+    let inFrontMatter = chunk.index === 0 && hasFrontMatterBlock(lines);
+    lines.forEach((line, offset) => {
+      if (inFrontMatter) {
+        if (offset > 0 && /^(---|\.\.\.)\s*$/.test(line)) inFrontMatter = false;
+        return;
+      }
       if (FENCE_RE.test(line.trim())) {
         inFence = !inFence;
         return;
@@ -168,19 +189,9 @@ export function createMarkdownRenderer(baseDirectory: string | null) {
     slugify,
     listType: "ul"
   });
-
-  // front-matter 处理：渲染前剥离 YAML front-matter 块，避免它被当作分隔线/正文显示。
-  // 通过 core 规则在 block 解析前移除首部 --- 闭合块。
-  md.core.ruler.before("normalize", "strip_front_matter", (state) => {
-    const src = state.src;
-    if (!src.startsWith("---\n")) return false;
-    const end = src.indexOf("\n---", 4);
-    if (end === -1) return false;
-    // 跳过结束标记后的换行
-    const after = src.indexOf("\n", end + 4);
-    state.src = after === -1 ? "" : src.slice(after + 1);
-    return false;
-  });
+  // 使用块级解析插件处理 YAML front matter。它只匹配文档开头完整闭合的
+  // `---` 块，不会被 YAML 内的注释或不同换行符干扰。
+  md.use(markdownItFrontMatter, () => {});
 
   const defaultFence = md.renderer.rules.fence as RenderRule;
   md.renderer.rules.fence = ((tokens, idx, options, env, self) => {
@@ -196,7 +207,10 @@ export function createMarkdownRenderer(baseDirectory: string | null) {
   const defaultHeadingOpen =
     md.renderer.rules.heading_open ??
     (((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options)) as RenderRule);
-  md.renderer.rules.heading_open = ((tokens, idx, options, env: { chunkIndex?: number; headingIndex?: number }, self) => {
+  md.renderer.rules.heading_open = ((tokens, idx, options, env: MarkdownRenderEnv, self) => {
+    // 分块预览需要包含块索引的稳定 ID；整篇文档渲染则保留 anchor
+    // 插件生成的 slug，确保 TOC 链接与标题 ID 一致。
+    if (env.documentMode) return defaultHeadingOpen(tokens, idx, options, env, self);
     const inline = tokens[idx + 1];
     const text = inline?.content ?? "heading";
     const localIndex = env.headingIndex ?? 0;
@@ -235,9 +249,9 @@ export function renderMarkdownChunks(chunks: MarkdownChunk[], baseDirectory: str
 }
 
 export function renderMarkdownDocument(markdown: string, baseDirectory: string | null): string {
-  return renderMarkdownChunks(splitMarkdownIntoChunks(markdown), baseDirectory)
-    .map((chunk) => chunk.html)
-    .join("\n");
+  // TOC、脚注和 front matter 都具有文档级语义，必须在同一次 MarkdownIt
+  // 解析中处理；分块只用于交互式只读预览的渐进渲染。
+  return createMarkdownRenderer(baseDirectory).render(markdown, { documentMode: true });
 }
 
 /**
