@@ -4,6 +4,7 @@ dist-electron/
 coverage/
 outputs/
 dist-build/
+dist-build-release/
 .tools/
 *.log
 *.tsbuildinfo
