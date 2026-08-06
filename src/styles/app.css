@@ -17,6 +17,7 @@
   --scrollbar-thumb: #c9c9c9;
   --scrollbar-thumb-hover: #a9a9a9;
   --status-height: 38px;
+  --titlebar-height: 32px;
   --drawer-width: 268px;
   --font-ui: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --font-doc: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
@@ -173,6 +174,8 @@ button {
   grid-template-rows: minmax(0, 1fr) var(--status-height);
   width: 100%;
   height: 100%;
+  /* 顶部留出自绘菜单栏的高度，避免内容被菜单栏遮挡 */
+  padding-top: var(--titlebar-height);
   background: var(--bg);
 }
 
@@ -581,7 +584,7 @@ button {
 .source-editor {
   display: block;
   width: min(920px, calc(100vw - 160px));
-  min-height: calc(100vh - var(--status-height));
+  height: 100%;
   margin: 0 auto;
   padding: 48px 0 92px;
   resize: none;
@@ -973,45 +976,132 @@ button {
   background: var(--bg);
 }
 
-.more-menu {
-  position: fixed;
-  z-index: 30;
-  left: 104px;
-  bottom: calc(var(--status-height) + 8px);
-  min-width: 176px;
-  padding: 7px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
-}
+/* ===== 自绘 HTML 菜单栏（替代原生菜单，颜色随主题 CSS 变量变化） ===== */
 
-.more-menu button {
+.menu-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
   display: flex;
   align-items: center;
-  gap: 7px;
-  width: 100%;
-  height: 30px;
+  height: var(--titlebar-height);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12.5px;
+  user-select: none;
+  /* 整个菜单栏可拖动窗口；交互元素单独标记 no-drag。
+     右侧系统按钮由 titleBarOverlay 原生浮在 web 之上，不影响左侧拖动。 */
+  -webkit-app-region: drag;
+}
+
+.menu-top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  /* 菜单项需点击打开下拉，不能拖动 */
+  -webkit-app-region: no-drag;
+}
+
+.menu-top-button {
+  display: flex;
+  align-items: center;
+  height: 100%;
   padding: 0 8px;
   border: 0;
-  border-radius: 4px;
   background: transparent;
-  color: var(--text);
-  text-align: left;
-  font-size: 12.5px;
+  color: inherit;
+  font: inherit;
+  cursor: default;
 }
 
-.more-menu button:hover {
-  background: var(--surface);
+.menu-top-button:hover,
+.menu-top.is-open .menu-top-button {
+  background: var(--surface-2);
 }
 
-.more-menu .more-close {
+.menu-dropdown {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 22px;
-  justify-content: center;
-  opacity: 0.65;
+  top: 100%;
+  left: 0;
+  min-width: 220px;
+  padding: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+  z-index: 50;
+}
+
+.menu-item-submenu {
+  position: relative;
+}
+
+.menu-dropdown-nested {
+  top: 0;
+  left: 100%;
+  display: none;
+  min-width: 260px;
+}
+
+.menu-item-submenu:hover .menu-dropdown-nested {
+  display: block;
+}
+
+.menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border-soft);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.menu-item:hover {
+  background: var(--accent-soft);
+}
+
+.menu-item.is-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.menu-item-check {
+  display: inline-block;
+  width: 14px;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.menu-item-label {
+  flex: 1 1 auto;
+}
+
+.menu-item-accel {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+}
+
+/* 可拖动占位条：填满菜单组右侧到系统按钮之间的空白，提供连续大块拖动区域 */
+.menu-drag-spacer {
+  flex: 1 1 auto;
+  height: 100%;
+  /* 继承父级 .menu-bar 的 drag，不设 no-drag */
 }
 
 .find-replace-bar {

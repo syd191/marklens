@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, type WebContents } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, shell, type WebContents } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -483,6 +483,14 @@ function createWindow() {
     show: false,
     backgroundColor: getSystemTheme() === "night" ? "#1f1f1f" : "#ffffff",
     icon: path.join(__dirname, "../assets/icon.ico"),
+    // 自定义标题栏：保留系统按钮（最小化/最大化/关闭），背景色与符号色可控，
+    // 使每个主题的标题栏颜色精确匹配（如 newsprint 的米色、pixyll 的暖白）
+    titleBarStyle: "hidden",
+    titleBarOverlay: {
+      color: getSystemTheme() === "night" ? "#1f1f1f" : "#ffffff",
+      symbolColor: getSystemTheme() === "night" ? "#d8d8d8" : "#262626",
+      height: 32
+    },
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -502,6 +510,11 @@ function createWindow() {
   window.once("ready-to-show", () => {
     window.show();
   });
+
+  // 隐藏原生菜单栏（改由渲染进程自绘 HTML 菜单栏，颜色随主题变化），
+  // 但保留原生菜单以维持 role 快捷键（剪贴板/缩放/devTools）有效。
+  // 不设 autoHideMenuBar，避免按 Alt 临时唤出原生菜单造成双菜单
+  window.setMenuBarVisibility(false);
 
   window.on("focus", createMenu);
   window.on("close", (event) => {
@@ -904,6 +917,31 @@ function registerIpc() {
     return { ok: true };
   });
   ipcMain.handle("theme:get-system", async () => getSystemTheme());
+  // 主题应用：更新 nativeTheme + 标题栏 overlay 颜色 + 窗口背景色，
+  // 使 newsprint（米色）/pixyll（暖白）等浅色主题的标题栏精确匹配
+  ipcMain.handle("theme:apply", async (event, themeMode: string) => {
+    const themeColors: Record<string, { bg: string; symbol: string }> = {
+      github: { bg: "#ffffff", symbol: "#333333" },
+      newsprint: { bg: "#f4f0e8", symbol: "#2e2a25" },
+      night: { bg: "#1f1f1f", symbol: "#eeeeee" },
+      pixyll: { bg: "#fffdf9", symbol: "#4a4037" },
+      whitey: { bg: "#ffffff", symbol: "#222222" }
+    };
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    if (themeMode === "system") {
+      nativeTheme.themeSource = "system";
+      const resolved = getSystemTheme();
+      const colors = resolved === "night" ? themeColors.night : themeColors.github;
+      win.setTitleBarOverlay({ color: colors.bg, symbolColor: colors.symbol });
+      win.setBackgroundColor(colors.bg);
+      return;
+    }
+    nativeTheme.themeSource = themeMode === "night" ? "dark" : "light";
+    const colors = themeColors[themeMode] ?? themeColors.github;
+    win.setTitleBarOverlay({ color: colors.bg, symbolColor: colors.symbol });
+    win.setBackgroundColor(colors.bg);
+  });
   ipcMain.handle("locale:get-system", async () => app.getLocale());
   ipcMain.handle("app:open-project-repository", async () => {
     await shell.openExternal(projectRepositoryUrl);
@@ -931,6 +969,15 @@ function registerIpc() {
     event.sender.setZoomFactor(Math.max(0.5, Math.min(2, factor)));
     return { ok: true };
   });
+  ipcMain.handle("window:toggle-devtools", async (event) => {
+    if (event.sender.isDevToolsOpened()) event.sender.closeDevTools();
+    else event.sender.openDevTools({ mode: "detach" });
+    return { ok: true };
+  });
+  // 剪贴板读取：sandbox 下 document.execCommand("paste") 不可靠，
+  // 改由主进程读 clipboard，渲染进程再用 insertText 插入
+  ipcMain.handle("clipboard:read-text", async () => clipboard.readText());
+  ipcMain.handle("app:get-recent-files", async () => recentPaths.slice());
   ipcMain.handle("window:close", async (event, force = false) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (window && force) forceCloseWindows.add(window.id);

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { ListTree, Search, X } from "lucide-react";
 import type { AppStrings } from "../lib/i18n";
 import type { OutlineItem, SidebarTab } from "../types";
@@ -28,7 +29,7 @@ type SidebarDrawerProps = {
   listDirectory: (dirPath: string) => Promise<DirectoryListing>;
 };
 
-export function SidebarDrawer({
+export const SidebarDrawer = memo(function SidebarDrawer({
   t,
   open,
   tab,
@@ -120,4 +121,4 @@ export function SidebarDrawer({
       </div>
     </aside>
   );
-}
+});

@@ -287,14 +287,28 @@ export async function renderMermaidDiagrams(html: string, isDark: boolean): Prom
   return result;
 }
 
+const WORD_COUNT_CJK_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu;
+// 数字：每个数字字符单独计 1（如 "111" 计 3，而不是当一个整词计 1）
+const WORD_COUNT_DIGIT_RE = /\p{N}/gu;
+// 单次扫描移除：围栏代码块、行内代码、URL、HTML 标签（用 | 合并，减少全量扫描次数）
+const WORD_COUNT_STRIP_RE = /```[\s\S]*?```|`[^`]*`|https?:\/\/\S+|<[^>]+>/g;
+const WORD_COUNT_NON_WORD_RE = /[^\p{L}\s-]/gu;
+
 export function getWordCount(markdown: string): number {
-  const cjk = markdown.match(/[\u4e00-\u9fff]/g)?.length ?? 0;
-  const words = markdown
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/[\u4e00-\u9fff]/g, " ")
-    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+  // 先剥离围栏代码块/行内代码/URL/HTML 标签，统一在剥离后的文本上统计，
+  // 保证代码/URL/HTML 内部的字符不会被计入（与词数统计口径一致）
+  const stripped = markdown.replace(WORD_COUNT_STRIP_RE, " ");
+  // CJK 字符数（汉字/日文假名/韩文），每个字符算一个字
+  const cjk = stripped.match(WORD_COUNT_CJK_RE)?.length ?? 0;
+  // 数字字符数：每个数字（含全角）算一个字
+  const digits = stripped.match(WORD_COUNT_DIGIT_RE)?.length ?? 0;
+  // 拉丁词数：再移除 CJK、数字与符号，按空白拆分
+  const words = stripped
+    .replace(WORD_COUNT_CJK_RE, " ")
+    .replace(WORD_COUNT_DIGIT_RE, " ")
+    .replace(WORD_COUNT_NON_WORD_RE, " ")
     .trim()
     .split(/\s+/)
     .filter(Boolean).length;
-  return cjk + words;
+  return cjk + digits + words;
 }

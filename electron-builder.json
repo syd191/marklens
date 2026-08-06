@@ -2,14 +2,17 @@
   "appId": "com.marklens.reader",
   "productName": "MarkLens",
   "directories": {
-    "output": "../../outputs"
+    "output": "./dist-build"
   },
   "files": [
     "assets/**/*",
     "dist/**/*",
     "dist-electron/**/*",
-    "package.json"
+    "package.json",
+    "!node_modules/**/*"
   ],
+  "compression": "maximum",
+  "afterPack": "scripts/afterPack.mjs",
   "win": {
     "target": ["nsis", "portable"],
     "icon": "assets/icon.ico",

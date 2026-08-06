@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import {
   applyMarkdownCommand,
   moveSelectedLines,
@@ -43,7 +43,7 @@ function getCursorPosition(value: string, start: number, end: number): CursorPos
   };
 }
 
-export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(function SourceEditor(
+export const SourceEditor = memo(forwardRef<SourceEditorHandle, SourceEditorProps>(function SourceEditor(
   { value, baseDirectory, fontSize, spellCheck, typewriterMode, onChange, onCursorChange },
   ref
 ) {
@@ -284,4 +284,4 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(fu
       />
     </main>
   );
-});
+}));

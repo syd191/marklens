@@ -1,7 +1,7 @@
 export type ThemeMode = "system" | "github" | "newsprint" | "night" | "pixyll" | "whitey";
 export type ResolvedTheme = Exclude<ThemeMode, "system">;
-export type AppLanguage = "zh-CN" | "en-US";
-export type LanguageMode = "system" | "zh-CN" | "en-US";
+export type AppLanguage = "zh-CN" | "zh-TW" | "en-US";
+export type LanguageMode = "system" | "zh-CN" | "zh-TW" | "en-US";
 export type SidebarTab = "outline" | "files" | "search";
 export type SaveStatus = "clean" | "unsaved" | "saving" | "saved" | "failed" | "conflict";
 

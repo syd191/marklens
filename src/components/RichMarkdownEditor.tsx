@@ -1,4 +1,6 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { forwardRef, memo, useEffect, useImperativeHandle, useMemo, useRef, useState, type MutableRefObject } from "react";
+// MDXEditor 样式随组件懒加载（首屏源码模式用不到，避免阻塞启动）
+import "@mdxeditor/editor/style.css";
 import {
   AdmonitionDirectiveDescriptor,
   CodeMirrorEditor,
@@ -46,7 +48,7 @@ import { encodeFileUrlPath } from "../lib/markdown";
 
 export type RichMarkdownEditorHandle = {
   execute: (command: string) => boolean;
-  focus: () => void;
+  focus: (callbackFn?: () => void, opts?: { defaultSelection?: "rootStart" | "rootEnd"; preventScroll?: boolean }) => void;
 };
 
 type CommandChannel = {
@@ -204,7 +206,7 @@ function RichCommandBridge({ channel }: { channel: MutableRefObject<CommandChann
   return null;
 }
 
-export const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEditorProps>(function RichMarkdownEditor({
+export const RichMarkdownEditor = memo(forwardRef<RichMarkdownEditorHandle, RichMarkdownEditorProps>(function RichMarkdownEditor({
   markdown,
   baseDirectory,
   fontSize,
@@ -268,10 +270,22 @@ export const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkd
     })
   ], [baseDirectory]);
 
+  // 标记内部输入触发的更新，跳过 markdown prop 反向同步，
+  // 避免每次输入都 getMarkdown() 比较（大文档 O(n)）+ 误触 setMarkdown 全量重解析
+  const isInternalChangeRef = useRef(false);
+  // 标记外部 setMarkdown 后即将到来的首次 onChange（MDXEditor 会规范化产生一次回调），
+  // 跳过它避免误标 unsaved；只有真正用户输入才上抛 onChange
+  const pendingExternalSetRef = useRef(false);
+
   useEffect(() => {
+    if (isInternalChangeRef.current) {
+      isInternalChangeRef.current = false;
+      return;
+    }
     setParseError(null);
     const currentMarkdown = editorRef.current?.getMarkdown();
     if (currentMarkdown !== undefined && currentMarkdown !== markdown) {
+      pendingExternalSetRef.current = true;
       editorRef.current?.setMarkdown(markdown);
     }
   }, [markdown]);
@@ -309,8 +323,8 @@ export const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkd
       }
       return commandChannelRef.current.execute?.(command) ?? false;
     },
-    focus() {
-      editorRef.current?.focus();
+    focus(callbackFn, opts) {
+      editorRef.current?.focus(callbackFn, opts);
     }
   }), []);
 
@@ -335,12 +349,20 @@ export const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkd
         markdown={markdown}
         spellCheck={spellCheck}
         plugins={plugins}
-        placeholder="开始输入 Markdown..."
+        autoFocus={{ defaultSelection: "rootEnd" }}
         onChange={(value, initialNormalize) => {
-          if (!initialNormalize && value !== markdown) onChange(value);
+          if (initialNormalize) return;
+          if (pendingExternalSetRef.current) {
+            pendingExternalSetRef.current = false;
+            return;
+          }
+          if (value !== markdown) {
+            isInternalChangeRef.current = true;
+            onChange(value);
+          }
         }}
         onError={({ error }) => setParseError(error)}
       />
     </main>
   );
-});
+}));

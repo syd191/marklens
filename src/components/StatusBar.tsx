@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Code2, Focus, MoreHorizontal, PanelLeftClose, PanelLeftOpen, TextCursorInput } from "lucide-react";
+import { Code2, Focus, PanelLeftClose, PanelLeftOpen, TextCursorInput } from "lucide-react";
 import { IconButton } from "./IconButton";
 import type { AppStrings } from "../lib/i18n";
 import type { SaveStatus } from "../types";
@@ -22,7 +22,6 @@ type StatusBarProps = {
   onToggleTypewriter: () => void;
   onOpenWordCount: () => void;
   onZoomChange: (zoom: number) => void;
-  onOpenMore: () => void;
 };
 
 // memo: 光标移动会高频更新 cursor 状态，但只有 line/column 变化时才需重渲染状态栏；
@@ -44,8 +43,7 @@ export const StatusBar = memo(function StatusBar({
   onToggleFocus,
   onToggleTypewriter,
   onOpenWordCount,
-  onZoomChange,
-  onOpenMore
+  onZoomChange
 }: StatusBarProps) {
   const fileLabel = currentName ?? t.status.noFile;
   const status = t.status.save[saveStatus];
@@ -64,9 +62,6 @@ export const StatusBar = memo(function StatusBar({
         </IconButton>
         <IconButton title="打字机模式 (F9)" active={typewriterMode} onClick={onToggleTypewriter}>
           <TextCursorInput size={17} strokeWidth={1.8} />
-        </IconButton>
-        <IconButton title={t.status.more} onClick={onOpenMore}>
-          <MoreHorizontal size={18} strokeWidth={1.8} />
         </IconButton>
       </div>
       <div className="status-path">

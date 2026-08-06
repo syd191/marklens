@@ -59,6 +59,11 @@ describe("markdown rendering", () => {
     expect(getWordCount("中文 test words")).toBe(4);
   });
 
+  it("counts each digit character separately", () => {
+    expect(getWordCount("111")).toBe(3);
+    expect(getWordCount("中文 123 abc")).toBe(6);
+  });
+
   it("resolves footnotes across document sections", () => {
     const html = renderMarkdownDocument("# A\n\nText with a note[^1].\n\n## B\n\n[^1]: Footnote body", null);
     expect(html).toMatch(/<sup[^>]*class="footnote-ref"/);

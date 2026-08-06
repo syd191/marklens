@@ -8,10 +8,10 @@ MarkLens keeps the document first: the sidebar is hidden by default, the outline
 
 ## Download
 
-The current project version is **v0.2.2**. Published Windows builds are available from the [Releases page](https://github.com/syd191/marklens/releases); running `npm run dist` produces:
+The current project version is **v0.2.3**. Published Windows builds are available from the [Releases page](https://github.com/syd191/marklens/releases); running `npm run dist` produces:
 
-- `MarkLens Setup 0.2.2.exe`: installer.
-- `MarkLens-0.2.2-x64-portable.exe`: portable executable.
+- `MarkLens Setup 0.2.3.exe`: installer.
+- `MarkLens-0.2.3-x64-portable.exe`: portable executable.
 
 > Windows builds are currently unsigned, so Microsoft Defender SmartScreen may prompt on first launch.
 
@@ -43,7 +43,8 @@ MarkLens 0.2.1 current-folder file browsing:
 - Saves pasted or dropped local images beside the document in an `assets` directory.
 - Keeps auto save off by default; users must enable it explicitly.
 - Supports Github, Newsprint, Night, Pixyll, Whitey, and Follow System themes.
-- Follows the system language by default, with Simplified Chinese and English UI.
+- A custom HTML menu bar re-colors with the active theme while preserving all shortcuts.
+- Follows the system language by default, with Simplified Chinese, Traditional Chinese, and English UI.
 
 ## Markdown Support
 
@@ -119,7 +120,7 @@ Build artifacts are written to `../../outputs` from this project folder.
 - `src/components/SourceEditor.tsx`: source editor, history, find, and selection operations.
 - `src/lib/editorCommands.ts`: tested Markdown source transformations.
 - `src/lib/markdown.ts`: chunking, outline extraction, progressive preview, and whole-document rendering.
-- `src/lib/i18n.ts`: Chinese / English UI strings and language resolution.
+- `src/lib/i18n.ts`: Simplified Chinese / Traditional Chinese / English UI strings and language resolution.
 - `assets/`: App icon source files.
 - `docs/`: Architecture and maintenance notes.
 - `CHANGELOG.md`: release history.

@@ -8,10 +8,10 @@ MarkLens 的核心体验是“正文优先”：默认隐藏侧栏，打开文�
 
 ## 下载
 
-当前项目版本是 **v0.2.2**。已发布的 Windows 构建可从 [Releases 页面](https://github.com/syd191/marklens/releases) 下载；执行 `npm run dist` 时会生成：
+当前项目版本是 **v0.2.3**。已发布的 Windows 构建可从 [Releases 页面](https://github.com/syd191/marklens/releases) 下载；执行 `npm run dist` 时会生成：
 
-- `MarkLens Setup 0.2.2.exe`：安装包。
-- `MarkLens-0.2.2-x64-portable.exe`：便携版。
+- `MarkLens Setup 0.2.3.exe`：安装包。
+- `MarkLens-0.2.3-x64-portable.exe`：便携版。
 
 > Windows 构建目前未进行代码签名，首次运行时可能出现 Microsoft Defender SmartScreen 提示。
 
@@ -43,7 +43,8 @@ MarkLens 0.2.1 当前目录文件浏览：
 - 粘贴或拖入本地图片时可保存到文档旁的 `assets` 目录。
 - 自动保存默认关闭，用户必须在设置中主动开启。
 - 支持 Github、Newsprint、Night、Pixyll、Whitey 和跟随系统主题。
-- 默认跟随系统语言，内置简体中文和英文界面。
+- 自定义 HTML 菜单栏随主题动态换色，并保留全部快捷键。
+- 默认跟随系统语言，内置简体中文、繁体中文和英文界面。
 
 ## Markdown 支持
 
@@ -119,7 +120,7 @@ npm run dist
 - `src/components/SourceEditor.tsx`：源码编辑器、历史记录、查找和选区操作。
 - `src/lib/editorCommands.ts`：可测试的 Markdown 文本命令。
 - `src/lib/markdown.ts`：Markdown 分块、大纲提取、渐进预览和整篇文档渲染。
-- `src/lib/i18n.ts`：中英文界面文案和语言解析。
+- `src/lib/i18n.ts`：简体中文、繁体中文、英文界面文案和语言解析。
 - `assets/`：应用图标源文件。
 - `docs/`：架构和维护说明。
 - `CHANGELOG.md`：版本变更记录。

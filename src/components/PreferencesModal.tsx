@@ -77,7 +77,7 @@ export function PreferencesModal({ t, open, preferences, onChange, onClose }: Pr
             {section === "language" && <section className="preference-group">
               <h3>{t.language.label}</h3>
               <div className="segmented-list">
-                {(["system", "zh-CN", "en-US"] as LanguageMode[]).map((mode) => (
+                {(["system", "zh-CN", "zh-TW", "en-US"] as LanguageMode[]).map((mode) => (
                   <label key={mode}>
                     <input
                       type="radio"
@@ -85,7 +85,15 @@ export function PreferencesModal({ t, open, preferences, onChange, onClose }: Pr
                       checked={preferences.languageMode === mode}
                       onChange={() => update("languageMode", mode)}
                     />
-                    <span>{mode === "system" ? t.language.system : mode === "zh-CN" ? t.language.chinese : t.language.english}</span>
+                    <span>
+                      {mode === "system"
+                        ? t.language.system
+                        : mode === "zh-CN"
+                          ? t.language.chinese
+                          : mode === "zh-TW"
+                            ? t.language.traditional
+                            : t.language.english}
+                    </span>
                   </label>
                 ))}
               </div>

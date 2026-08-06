@@ -1,9 +1,13 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { FindReplaceBar } from "./components/FindReplaceBar";
 import { AboutModal, PROJECT_REPOSITORY_URL } from "./components/AboutModal";
-import { MoreMenu } from "./components/MoreMenu";
+import { MenuBar } from "./components/MenuBar";
 import { PreferencesModal } from "./components/PreferencesModal";
-import { RichMarkdownEditor, type RichMarkdownEditorHandle } from "./components/RichMarkdownEditor";
+import type { RichMarkdownEditorHandle } from "./components/RichMarkdownEditor";
+// 富文本编辑器依赖庞大的 MDXEditor/Lexical，仅在使用时才加载，避免拖慢首屏（启动默认源码模式用不到）
+const RichMarkdownEditor = lazy(() =>
+  import("./components/RichMarkdownEditor").then((m) => ({ default: m.RichMarkdownEditor }))
+);
 import { SidebarDrawer } from "./components/SidebarDrawer";
 import { SourceEditor, type CursorPosition, type SourceEditorHandle } from "./components/SourceEditor";
 import { StatusBar } from "./components/StatusBar";
@@ -12,12 +16,14 @@ import { i18n, resolveLanguage } from "./lib/i18n";
 import { buildOutline, getWordCount, renderMarkdownDocument, renderMermaidDiagrams, splitMarkdownIntoChunks } from "./lib/markdown";
 import { loadPreferences, savePreferences } from "./lib/storage";
 import { useDebouncedEffect } from "./lib/useDebouncedEffect";
-import type { AppLanguage, CurrentDocument, OutlineItem, Preferences, ResolvedTheme, SaveStatus, SidebarTab } from "./types";
+import type { AppLanguage, CurrentDocument, MarkdownChunk, OutlineItem, Preferences, ResolvedTheme, SaveStatus, SidebarTab } from "./types";
 
 const browserLanguage = typeof navigator !== "undefined" ? navigator.language : "en-US";
 const initialSystemTheme: ResolvedTheme =
   typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "night" : "github";
 const initialLanguage = resolveLanguage("system", browserLanguage);
+// 大纲不需要时复用的空数组，避免每次 render 产生新引用触发 outline useMemo 重算
+const EMPTY_CHUNKS: MarkdownChunk[] = [];
 
 function createInitialDocument(): CurrentDocument {
   return {
@@ -58,11 +64,12 @@ export default function App() {
   const [systemLanguage, setSystemLanguage] = useState<AppLanguage>(initialLanguage);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("outline");
-  const [sourceMode, setSourceMode] = useState(false);
+  // 无文档时默认进入编辑模式（源码/textarea），有内容且未打开文件也保持可编辑；
+  // 打开文件时由 openFilePayload 切到富文本预览模式
+  const [sourceMode, setSourceMode] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("clean");
   const [fileRoot, setFileRoot] = useState<DirectoryListing | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [moreOpen, setMoreOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [findReplaceOpen, setFindReplaceOpen] = useState(false);
@@ -94,14 +101,22 @@ export default function App() {
   // 再次触发 effect 重复保存（#2）
   const lastAutoSavedContentRef = useRef<string | null>(null);
   const [, startTransition] = useTransition();
+  // sourceMode 的 ref，供稳定引用的 focusEditor 在菜单操作后决定聚焦哪个编辑器
+  const sourceModeRef = useRef(sourceMode);
+  sourceModeRef.current = sourceMode;
 
   const resolvedTheme: ResolvedTheme = preferences.themeMode === "system" ? systemTheme : preferences.themeMode;
   const language = resolveLanguage(preferences.languageMode, systemLanguage);
   const t = i18n[language];
   const deferredContent = useDeferredValue(document.content);
-  const chunks = useMemo(() => splitMarkdownIntoChunks(deferredContent), [deferredContent]);
   const shouldBuildOutline = preferences.preloadOutline || (sidebarOpen && sidebarTab === "outline");
+  // chunks 仅在大纲需要时计算（侧栏关闭/非大纲 tab 时跳过全量切分）
+  const chunks = useMemo(
+    () => (shouldBuildOutline ? splitMarkdownIntoChunks(deferredContent) : EMPTY_CHUNKS),
+    [deferredContent, shouldBuildOutline]
+  );
   const outline = useMemo(() => (shouldBuildOutline ? buildOutline(chunks) : []), [chunks, shouldBuildOutline]);
+  // 字数统计：依赖低优先级 deferredContent，内容变化时才重算（无需额外 debounce state，避免多余重渲染）
   const wordCount = useMemo(() => getWordCount(deferredContent), [deferredContent]);
   const searchMatches = useMemo(() => getMatches(deferredContent, searchTerm), [deferredContent, searchTerm]);
   const findMatchCount = useMemo(() => getMatchCount(deferredContent, searchTerm), [deferredContent, searchTerm]);
@@ -124,7 +139,6 @@ export default function App() {
       setSourceMode(false);
       setSaveStatus("clean");
       setSearchTerm("");
-      setMoreOpen(false);
     });
     // 切换文件时重置自动保存快照，避免新文件内容恰好与上一文件相同时被错误跳过
     lastAutoSavedContentRef.current = null;
@@ -156,7 +170,6 @@ export default function App() {
     setFileRoot(root);
     setSidebarOpen(true);
     setSidebarTab("files");
-    setMoreOpen(false);
   }, []);
 
   const listDirectory = useCallback(async (dirPath: string) => {
@@ -337,7 +350,6 @@ export default function App() {
     // 预渲染 mermaid 图表为 SVG，使导出的 HTML 自包含、可离线查看
     const html = await renderMermaidDiagrams(rawHtml, resolvedTheme === "night");
     await window.markdownBridge?.exportHtml({ title: document.name.replace(/\.[^.]+$/, ""), html, theme: resolvedTheme });
-    setMoreOpen(false);
   }, [document.content, document.directory, document.name, resolvedTheme]);
 
   const exportPdf = useCallback(async () => {
@@ -420,7 +432,36 @@ export default function App() {
     root.dataset.statusBar = statusBarVisible ? "true" : "false";
     root.style.colorScheme = resolvedTheme === "night" ? "dark" : "light";
     root.lang = language;
-  }, [focusMode, language, preferences.smoothScroll, resolvedTheme, statusBarVisible]);
+    // 通知主进程更新标题栏 overlay 与窗口背景色，使标题栏精确匹配主题（#16）
+    window.markdownBridge?.applyTheme(preferences.themeMode);
+  }, [focusMode, language, preferences.smoothScroll, resolvedTheme, statusBarVisible, preferences.themeMode]);
+
+  // 切换主题会触发 App 重渲染导致编辑器失焦，主题变化后用 rAF 循环
+  // 重新聚焦编辑区（直到焦点真正落到编辑器上），恢复 caret
+  // 若模态框打开（偏好设置/关于/字数/查找替换）则跳过，避免抢走模态框内的焦点
+  const firstThemeRenderRef = useRef(true);
+  const modalOpenRef = useRef(false);
+  modalOpenRef.current = preferencesOpen || aboutOpen || wordCountOpen || findReplaceOpen;
+  useEffect(() => {
+    if (firstThemeRenderRef.current) {
+      firstThemeRenderRef.current = false;
+      return;
+    }
+    let raf = 0;
+    let attempts = 0;
+    const tryFocus = () => {
+      attempts += 1;
+      if (modalOpenRef.current) return;
+      if (sourceModeRef.current) editorRef.current?.focus();
+      else richEditorRef.current?.focus();
+      const active = window.document.activeElement;
+      const ok = active && (active.closest(".source-editor") || active.closest(".rich-markdown-content") || active.tagName === "TEXTAREA");
+      if (ok || attempts > 20) return;
+      raf = window.requestAnimationFrame(tryFocus);
+    };
+    raf = window.requestAnimationFrame(tryFocus);
+    return () => window.cancelAnimationFrame(raf);
+  }, [resolvedTheme]);
 
   useEffect(() => {
     if (!document.directory || fileRoot?.path === document.directory) return;
@@ -471,6 +512,102 @@ export default function App() {
   const ipcActionsRef = useRef(ipcActions);
   ipcActionsRef.current = ipcActions;
 
+  // 统一命令分发：原生菜单/HTML 菜单栏/快捷键都走这里。
+  // 通过 ref 读取最新的 document/preferences/actions，保持函数引用稳定（#15）
+  const dispatchCommand = useCallback((command: string) => {
+    const actions = ipcActionsRef.current;
+    const currentDoc = documentRef.current;
+    const currentPrefs = preferencesRef.current;
+    if (command === "new") void actions.createNewDocument();
+    if (command === "new-window") window.markdownBridge?.createNewWindow();
+    if (command === "open-file") actions.openFileDialog();
+    if (command === "quick-open" || command === "import") actions.openFileDialog();
+    if (command === "open-folder") actions.openFolderDialog();
+    if (command === "save") {
+      if (currentDoc.filePath) void actions.saveCurrentFile();
+      else void actions.saveAs();
+    }
+    if (command === "save-as") actions.saveAs();
+    if (command === "move-to") actions.moveCurrentFile();
+    if (command === "save-all") actions.saveCurrentFile();
+    if (command === "properties") actions.showProperties();
+    if (command === "show-in-folder" && currentDoc.filePath) actions.showInFolder(currentDoc.filePath);
+    if (command === "delete-file") actions.deleteCurrentFile();
+    if (command === "export-html") actions.exportHtml();
+    if (command === "export-pdf") actions.exportPdf();
+    if (command === "print") window.markdownBridge?.print();
+    if (command === "preferences") setPreferencesOpen(true);
+    if (command === "about") setAboutOpen(true);
+    if (command === "close-window" || command === "request-close") void actions.requestClose();
+    if (command === "find-replace") {
+      setSourceMode(true);
+      setFindReplaceOpen(true);
+    }
+    if (command === "show-search") {
+      setSidebarOpen(true);
+      setSidebarTab("search");
+    }
+    if (command === "toggle-sidebar") {
+      setSidebarOpen((value) => !value);
+      setSidebarTab("outline");
+    }
+    if (command === "show-outline") {
+      setSidebarOpen(true);
+      setSidebarTab("outline");
+    }
+    if (command === "show-files") {
+      setSidebarOpen(true);
+      setSidebarTab("files");
+    }
+    if (command === "toggle-source") setSourceMode((value) => !value);
+    if (command === "toggle-focus") setFocusMode((value) => !value);
+    if (command === "toggle-typewriter") {
+      setTypewriterMode((value) => !value);
+    }
+    if (command === "toggle-status-bar") setStatusBarVisible((value) => !value);
+    if (command === "word-count") setWordCountOpen(true);
+    if (command === "toggle-fullscreen") {
+      setFullscreen((value) => {
+        window.markdownBridge?.setFullscreen(!value);
+        return !value;
+      });
+    }
+    if (command === "toggle-always-on-top") {
+      setAlwaysOnTop((value) => {
+        window.markdownBridge?.setAlwaysOnTop(!value);
+        return !value;
+      });
+    }
+    if (command === "toggle-spellcheck") {
+      actions.updatePreferences({ ...currentPrefs, spellCheck: !currentPrefs.spellCheck });
+    }
+    if (command === "toggle-devtools") window.markdownBridge?.toggleDevTools();
+    if (command === "emoji") {
+      window.alert(actions.language.startsWith("zh") ? "请按 Win + . 打开 Windows 表情与符号面板。" : "Press Win + . to open the Windows emoji and symbols panel.");
+    }
+    if (command === "theme-system") actions.updatePreferences({ ...currentPrefs, themeMode: "system" });
+    if (command === "theme-github") actions.updatePreferences({ ...currentPrefs, themeMode: "github" });
+    if (command === "theme-newsprint") actions.updatePreferences({ ...currentPrefs, themeMode: "newsprint" });
+    if (command === "theme-night") actions.updatePreferences({ ...currentPrefs, themeMode: "night" });
+    if (command === "theme-pixyll") actions.updatePreferences({ ...currentPrefs, themeMode: "pixyll" });
+    if (command === "theme-whitey") actions.updatePreferences({ ...currentPrefs, themeMode: "whitey" });
+
+    const editorCommands = new Set([
+      "undo", "redo", "copy-plain", "copy-markdown", "copy-html", "paste-plain",
+      "select-all", "select-line", "move-line-up", "move-line-down", "delete", "delete-line",
+      "smart-punctuation", "normalize-line-endings", "trim-whitespace",
+      "heading-1", "heading-2", "heading-3", "heading-4", "heading-5", "heading-6",
+      "paragraph", "promote-heading", "demote-heading", "table", "math-block", "code-block",
+      "warning", "quote", "ordered-list", "unordered-list", "task-list", "indent-list",
+      "outdent-list", "insert-paragraph-above", "insert-paragraph-below", "link-reference",
+      "footnote", "horizontal-rule", "toc", "front-matter", "bold", "italic", "underline",
+      "inline-code", "strikethrough", "comment", "link", "image", "clear-format"
+    ]);
+    if (editorCommands.has(command)) actions.runEditorCommand(command);
+  }, []);
+  const dispatchCommandRef = useRef(dispatchCommand);
+  dispatchCommandRef.current = dispatchCommand;
+
   useEffect(() => {
     const offTheme = window.markdownBridge?.onSystemThemeChanged((theme) => setSystemTheme(theme === "night" ? "night" : "github"));
     const offOpenPath = window.markdownBridge?.onOpenPath((filePath) => ipcActionsRef.current.openPath(filePath));
@@ -497,97 +634,8 @@ export default function App() {
       if (payload) ipcActionsRef.current.openFilePayload(payload);
     });
 
-    // 命令通道：同样通过 ref 读取最新的 preferences/document，避免重订阅（#15）
-    const offCommand = window.markdownBridge?.onCommand((command) => {
-      const actions = ipcActionsRef.current;
-      const currentDoc = documentRef.current;
-      const currentPrefs = preferencesRef.current;
-      if (command === "new") void actions.createNewDocument();
-      if (command === "new-window") window.markdownBridge?.createNewWindow();
-      if (command === "open-file") actions.openFileDialog();
-      if (command === "quick-open" || command === "import") actions.openFileDialog();
-      if (command === "open-folder") actions.openFolderDialog();
-      if (command === "save") {
-        if (currentDoc.filePath) void actions.saveCurrentFile();
-        else void actions.saveAs();
-      }
-      if (command === "save-as") actions.saveAs();
-      if (command === "move-to") actions.moveCurrentFile();
-      if (command === "save-all") actions.saveCurrentFile();
-      if (command === "properties") actions.showProperties();
-      if (command === "show-in-folder" && currentDoc.filePath) actions.showInFolder(currentDoc.filePath);
-      if (command === "delete-file") actions.deleteCurrentFile();
-      if (command === "export-html") actions.exportHtml();
-      if (command === "export-pdf") actions.exportPdf();
-      if (command === "print") window.markdownBridge?.print();
-      if (command === "preferences") setPreferencesOpen(true);
-      if (command === "about") setAboutOpen(true);
-      if (command === "close-window" || command === "request-close") void actions.requestClose();
-      if (command === "find-replace") {
-        setSourceMode(true);
-        setFindReplaceOpen(true);
-      }
-      if (command === "show-search") {
-        setSidebarOpen(true);
-        setSidebarTab("search");
-      }
-      if (command === "toggle-sidebar") {
-        setSidebarOpen((value) => !value);
-        setSidebarTab("outline");
-      }
-      if (command === "show-outline") {
-        setSidebarOpen(true);
-        setSidebarTab("outline");
-      }
-      if (command === "show-files") {
-        setSidebarOpen(true);
-        setSidebarTab("files");
-      }
-      if (command === "toggle-source") setSourceMode((value) => !value);
-      if (command === "toggle-focus") setFocusMode((value) => !value);
-      if (command === "toggle-typewriter") {
-        setTypewriterMode((value) => !value);
-      }
-      if (command === "toggle-status-bar") setStatusBarVisible((value) => !value);
-      if (command === "word-count") setWordCountOpen(true);
-      if (command === "toggle-fullscreen") {
-        setFullscreen((value) => {
-          window.markdownBridge?.setFullscreen(!value);
-          return !value;
-        });
-      }
-      if (command === "toggle-always-on-top") {
-        setAlwaysOnTop((value) => {
-          window.markdownBridge?.setAlwaysOnTop(!value);
-          return !value;
-        });
-      }
-      if (command === "toggle-spellcheck") {
-        actions.updatePreferences({ ...currentPrefs, spellCheck: !currentPrefs.spellCheck });
-      }
-      if (command === "emoji") {
-        window.alert(actions.language === "zh-CN" ? "请按 Win + . 打开 Windows 表情与符号面板。" : "Press Win + . to open the Windows emoji and symbols panel.");
-      }
-      if (command === "theme-system") actions.updatePreferences({ ...currentPrefs, themeMode: "system" });
-      if (command === "theme-github") actions.updatePreferences({ ...currentPrefs, themeMode: "github" });
-      if (command === "theme-newsprint") actions.updatePreferences({ ...currentPrefs, themeMode: "newsprint" });
-      if (command === "theme-night") actions.updatePreferences({ ...currentPrefs, themeMode: "night" });
-      if (command === "theme-pixyll") actions.updatePreferences({ ...currentPrefs, themeMode: "pixyll" });
-      if (command === "theme-whitey") actions.updatePreferences({ ...currentPrefs, themeMode: "whitey" });
-
-      const editorCommands = new Set([
-        "undo", "redo", "copy-plain", "copy-markdown", "copy-html", "paste-plain",
-        "select-all", "select-line", "move-line-up", "move-line-down", "delete", "delete-line",
-        "smart-punctuation", "normalize-line-endings", "trim-whitespace",
-        "heading-1", "heading-2", "heading-3", "heading-4", "heading-5", "heading-6",
-        "paragraph", "promote-heading", "demote-heading", "table", "math-block", "code-block",
-        "warning", "quote", "ordered-list", "unordered-list", "task-list", "indent-list",
-        "outdent-list", "insert-paragraph-above", "insert-paragraph-below", "link-reference",
-        "footnote", "horizontal-rule", "toc", "front-matter", "bold", "italic", "underline",
-        "inline-code", "strikethrough", "comment", "link", "image", "clear-format"
-      ]);
-      if (editorCommands.has(command)) actions.runEditorCommand(command);
-    });
+    // 命令通道：复用 dispatchCommand，避免与 MenuBar 重复维护（#15）
+    const offCommand = window.markdownBridge?.onCommand((command) => dispatchCommandRef.current(command));
 
     if (!rendererReadySent.current) {
       rendererReadySent.current = true;
@@ -600,6 +648,14 @@ export default function App() {
       offChanged?.();
       offCommand?.();
     };
+  }, []);
+
+  // 启动时聚焦编辑器：rich 模式由 RichMarkdownEditor 内部 autoFocus 处理；
+  // 这里仅处理 source 模式（textarea focus 即可显示 caret）
+  useEffect(() => {
+    if (!sourceMode) return;
+    const timer = setTimeout(() => editorRef.current?.focus(), 100);
+    return () => clearTimeout(timer);
   }, []);
 
   useDebouncedEffect(
@@ -615,6 +671,20 @@ export default function App() {
     preferences.autoSaveDelay,
     [document.content, preferences.autoSave, preferences.autoSaveDelay, saveStatus]
   );
+
+  // 用 ref 保存高频变化的回调，避免每次输入都重注册 keydown 监听器
+  const saveCurrentFileRef = useRef(saveCurrentFile);
+  saveCurrentFileRef.current = saveCurrentFile;
+  const saveAsRef = useRef(saveAs);
+  saveAsRef.current = saveAs;
+  const createNewDocumentRef = useRef(createNewDocument);
+  createNewDocumentRef.current = createNewDocument;
+  const openFileDialogRef = useRef(openFileDialog);
+  openFileDialogRef.current = openFileDialog;
+  const openFolderDialogRef = useRef(openFolderDialog);
+  openFolderDialogRef.current = openFolderDialog;
+  const filePathRef = useRef(document.filePath);
+  filePathRef.current = document.filePath;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -639,24 +709,24 @@ export default function App() {
       const key = event.key.toLowerCase();
       if (key === "n") {
         event.preventDefault();
-        void createNewDocument();
+        void createNewDocumentRef.current();
         return;
       }
       if (key === "o" && event.shiftKey) {
         event.preventDefault();
-        openFolderDialog();
+        openFolderDialogRef.current();
         return;
       }
       if (key === "o") {
         event.preventDefault();
-        openFileDialog();
+        openFileDialogRef.current();
         return;
       }
       if (key === "s") {
         event.preventDefault();
-        if (event.shiftKey) saveAs();
-        else if (document.filePath) saveCurrentFile();
-        else saveAs();
+        if (event.shiftKey) saveAsRef.current();
+        else if (filePathRef.current) saveCurrentFileRef.current();
+        else saveAsRef.current();
         return;
       }
       if (key === "f") {
@@ -678,7 +748,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [createNewDocument, document.filePath, findReplaceOpen, openFileDialog, openFolderDialog, saveAs, saveCurrentFile]);
+  }, [findReplaceOpen]);
 
   useEffect(() => {
     const onDragOver = (event: DragEvent) => event.preventDefault();
@@ -701,8 +771,11 @@ export default function App() {
   }, [openPath]);
 
   const onContentChange = useCallback((value: string) => {
-    setDocument((current) => ({ ...current, content: value }));
-    setSaveStatus("unsaved");
+    setDocument((current) => {
+      if (current.content === value) return current;
+      return { ...current, content: value };
+    });
+    setSaveStatus((prev) => (prev === "unsaved" ? prev : "unsaved"));
   }, []);
 
   const toggleSidebar = useCallback(() => {
@@ -722,9 +795,35 @@ export default function App() {
     setZoom(next);
     window.markdownBridge?.setZoom(next / 100);
   }, []);
+  const zoomIn = useCallback(() => changeZoom(Math.min(200, zoom + 10)), [changeZoom, zoom]);
+  const zoomOut = useCallback(() => changeZoom(Math.max(50, zoom - 10)), [changeZoom, zoom]);
+  const zoomReset = useCallback(() => changeZoom(100), [changeZoom]);
+  // 菜单操作后恢复编辑区焦点（用 rAF 等 state 更新完成后），恢复 caret
+  const focusEditor = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      if (sourceModeRef.current) editorRef.current?.focus();
+      else richEditorRef.current?.focus();
+    });
+  }, []);
+  const requestSourceMode = useCallback(() => setSourceMode(true), []);
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
   return (
     <div className={`app-shell${focusMode ? " is-focus-mode" : ""}${statusBarVisible ? "" : " is-status-hidden"}`}>
+      <MenuBar
+        language={language}
+        themeMode={preferences.themeMode}
+        sourceMode={sourceMode}
+        focusMode={focusMode}
+        typewriterMode={typewriterMode}
+        statusBar={statusBarVisible}
+        onCommand={dispatchCommand}
+        onOpenPath={openPath}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onZoomReset={zoomReset}
+        onFocusEditor={focusEditor}
+      />
       <SidebarDrawer
         t={t}
         open={sidebarOpen}
@@ -735,7 +834,7 @@ export default function App() {
         searchTerm={searchTerm}
         searchMatches={searchMatches}
         onSetTab={setSidebarTab}
-        onClose={() => setSidebarOpen(false)}
+        onClose={closeSidebar}
         onJump={jumpToHeading}
         onOpenFolder={openFolderDialog}
         onOpenFile={openPath}
@@ -763,17 +862,19 @@ export default function App() {
             onCursorChange={setCursor}
           />
         ) : (
-          <RichMarkdownEditor
-            key={document.filePath ?? "untitled-rich"}
-            ref={richEditorRef}
-            markdown={document.content}
-            baseDirectory={document.directory}
-            fontSize={preferences.fontSize}
-            spellCheck={preferences.spellCheck}
-            typewriterMode={typewriterMode}
-            onChange={onContentChange}
-            onRequestSourceMode={() => setSourceMode(true)}
-          />
+          <Suspense fallback={<div className="rich-editor-shell" />}>
+            <RichMarkdownEditor
+              key={document.filePath ?? "untitled-rich"}
+              ref={richEditorRef}
+              markdown={document.content}
+              baseDirectory={document.directory}
+              fontSize={preferences.fontSize}
+              spellCheck={preferences.spellCheck}
+              typewriterMode={typewriterMode}
+              onChange={onContentChange}
+              onRequestSourceMode={requestSourceMode}
+            />
+          </Suspense>
         )}
         <FindReplaceBar
           t={t}
@@ -789,19 +890,6 @@ export default function App() {
           onClose={() => setFindReplaceOpen(false)}
         />
       </div>
-
-      <MoreMenu
-        t={t}
-        open={moreOpen}
-        onClose={() => setMoreOpen(false)}
-        onOpenFile={openFileDialog}
-        onOpenFolder={openFolderDialog}
-        onPreferences={() => {
-          setMoreOpen(false);
-          setPreferencesOpen(true);
-        }}
-        onExportHtml={exportHtml}
-      />
 
       <PreferencesModal
         t={t}
@@ -852,7 +940,6 @@ export default function App() {
         }}
         onOpenWordCount={() => setWordCountOpen(true)}
         onZoomChange={changeZoom}
-        onOpenMore={() => setMoreOpen((value) => !value)}
       />}
     </div>
   );

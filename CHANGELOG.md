@@ -2,6 +2,27 @@
 
 All notable changes to MarkLens are documented here.
 
+## 0.2.3 - 2026-08-06
+
+### Added
+
+- Add a custom HTML menu bar that follows the active theme (including menu colors), replacing the native menu while preserving all shortcuts.
+- Add Traditional Chinese (`zh-TW`) interface support; the language follows the system by default and can be changed in Preferences.
+- Make the title bar overlay and window background match the active theme.
+
+### Changed
+
+- Default to source (edit) mode so the caret is visible immediately on startup.
+- Improve startup and typing performance: lazy-load the rich-text editor, reduce word-count scans, compute the outline/word count only when needed, and stabilize editor component props.
+- Make Zoom In / Zoom Out actually scale the window instead of only updating the status-bar percentage.
+
+### Fixed
+
+- Zoom In / Zoom Out now take effect on the actual window scale.
+- Switching themes no longer steals focus from an open modal dialog (Preferences / About / word count / find & replace).
+- Word count no longer includes digits or CJK characters inside code blocks, URLs, or HTML tags.
+- Prevent an unnecessary "save on close" prompt when the content has not changed.
+
 ## 0.2.2 - 2026-08-02
 
 ### Added

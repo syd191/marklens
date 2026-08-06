@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { AppStrings } from "../lib/i18n";
 
 type FileTreeProps = {
@@ -36,7 +36,7 @@ function targetParentPath(target: ContextTarget) {
   return parentPathOf(target.path);
 }
 
-export function FileTree({
+export const FileTree = memo(function FileTree({
   t,
   root,
   selectedPath,
@@ -305,4 +305,4 @@ export function FileTree({
       {error && <div className="file-error">{error}</div>}
     </div>
   );
-}
+});
