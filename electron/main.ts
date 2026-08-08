@@ -2,6 +2,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, shel
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import JSZip from "jszip";
 
 type ThemeMode = "light" | "night";
 type SavePayload = {
@@ -62,6 +63,7 @@ const menuText: Record<AppLanguage, {
   night: string;
   about: string;
   markdownFilter: string;
+  allSupportedFilter: string;
   folderDialog: string;
   htmlFilter: string;
 }> = {
@@ -92,6 +94,7 @@ const menuText: Record<AppLanguage, {
     night: "夜间",
     about: "关于 MarkLens",
     markdownFilter: "Markdown 文档",
+    allSupportedFilter: "所有支持的文件",
     folderDialog: "打开文件夹",
     htmlFilter: "HTML 文件"
   },
@@ -122,6 +125,7 @@ const menuText: Record<AppLanguage, {
     night: "Night",
     about: "About MarkLens",
     markdownFilter: "Markdown Documents",
+    allSupportedFilter: "All Supported Files",
     folderDialog: "Open Folder",
     htmlFilter: "HTML Files"
   }
@@ -142,6 +146,18 @@ function getText() {
 function isMarkdownLike(filePath: string): boolean {
   const ext = path.extname(filePath).toLowerCase();
   return ext === ".md" || ext === ".markdown" || ext === ".txt";
+}
+
+function isEpubFile(filePath: string): boolean {
+  return path.extname(filePath).toLowerCase() === ".epub";
+}
+
+function isPdfFile(filePath: string): boolean {
+  return path.extname(filePath).toLowerCase() === ".pdf";
+}
+
+function isOpenableFile(filePath: string): boolean {
+  return isMarkdownLike(filePath) || isEpubFile(filePath) || isPdfFile(filePath);
 }
 
 function ensureMarkdownFile(filePath: string) {
@@ -192,7 +208,7 @@ function getLaunchPath(argv: string[]): string | null {
     if (!arg || arg.startsWith("-")) return false;
     try {
       const stat = fs.existsSync(arg) ? fs.statSync(arg) : null;
-      return Boolean(stat?.isFile() && isMarkdownLike(arg));
+      return Boolean(stat?.isFile() && isOpenableFile(arg));
     } catch {
       return false;
     }
@@ -555,11 +571,407 @@ async function readTextFile(filePath: string) {
   };
 }
 
+// ===== EPUB 支持 =====
+
+type EpubTocItem = {
+  id: string;
+  text: string;
+  level: number;
+  src?: string;
+};
+
+type EpubSpineItem = {
+  id: string;
+  href: string;
+};
+
+type OpenedEpub = {
+  filePath: string;
+  name: string;
+  directory: string;
+  title: string;
+  author: string;
+  toc: EpubTocItem[];
+  spine: EpubSpineItem[];
+  size: number;
+};
+
+// EPUB ZIP 缓存：key=filePath，避免反复解压
+const epubCache = new Map<string, JSZip>();
+// EPUB 元数据缓存：key=filePath
+const epubMetaCache = new Map<string, { spine: EpubSpineItem[]; toc: EpubTocItem[] }>();
+
+// 从 XML 字符串中提取所有匹配标签的属性
+function extractTags(xml: string, tagName: string): { attrs: Record<string, string>; text: string; raw: string }[] {
+  const results: { attrs: Record<string, string>; text: string; raw: string }[] = [];
+  // 匹配自闭合和非自闭合标签
+  const selfCloseRe = new RegExp(`<${tagName}\\b([^>]*?)\\/>`, "gi");
+  const openCloseRe = new RegExp(`<${tagName}\\b([^>]*?)>([\\s\\S]*?)<\\/${tagName}>`, "gi");
+
+  // 先处理自闭合标签
+  let m: RegExpExecArray | null;
+  while ((m = selfCloseRe.exec(xml)) !== null) {
+    const attrs = parseAttrs(m[1]);
+    results.push({ attrs, text: "", raw: m[0] });
+  }
+
+  // 再处理开闭标签
+  while ((m = openCloseRe.exec(xml)) !== null) {
+    const attrs = parseAttrs(m[1]);
+    const text = m[2].replace(/<[^>]*>/g, "").trim();
+    results.push({ attrs, text, raw: m[0] });
+  }
+
+  return results;
+}
+
+function parseAttrs(attrStr: string): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  const re = /(\w[\w:-]*)\s*=\s*"([^"]*)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(attrStr)) !== null) {
+    attrs[m[1].toLowerCase()] = m[2];
+  }
+  return attrs;
+}
+
+function extractAttr(xml: string, tagName: string, attrName: string): string | null {
+  const re = new RegExp(`<${tagName}\\b[^>]*?\\b${attrName}\\s*=\\s*"([^"]*)"`, "i");
+  const m = re.exec(xml);
+  return m ? m[1] : null;
+}
+
+function extractText(xml: string, tagName: string): string | null {
+  const re = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i");
+  const m = re.exec(xml);
+  return m ? m[1].replace(/<[^>]*>/g, "").trim() : null;
+}
+
+async function readEpubFile(filePath: string): Promise<OpenedEpub> {
+  const stat = await fs.promises.stat(filePath);
+  if (!stat.isFile()) throw new Error("Path is not a file.");
+  const data = await fs.promises.readFile(filePath);
+  const zip = await JSZip.loadAsync(data);
+  epubCache.set(filePath, zip);
+
+  // 解析 container.xml 获取 OPF 路径
+  const containerFile = zip.file("META-INF/container.xml");
+  if (!containerFile) throw new Error("Invalid EPUB: missing container.xml");
+  const containerXml = await containerFile.async("string");
+  const opfPath = extractAttr(containerXml, "rootfile", "full-path");
+  if (!opfPath) throw new Error("Invalid EPUB: missing OPF path");
+
+  // 解析 OPF
+  const opfFile = zip.file(opfPath);
+  if (!opfFile) throw new Error("Invalid EPUB: missing OPF file");
+  const opfXml = await opfFile.async("string");
+  const opfDir = path.posix.dirname(opfPath);
+
+  // 元数据
+  const title = extractText(opfXml, "dc:title") || extractText(opfXml, "title") || path.basename(filePath, ".epub");
+  const author = extractText(opfXml, "dc:creator") || extractText(opfXml, "creator") || "";
+
+  // manifest: id → href
+  const manifest = new Map<string, string>();
+  for (const item of extractTags(opfXml, "item")) {
+    const id = item.attrs["id"];
+    const href = item.attrs["href"];
+    if (id && href) manifest.set(id, href);
+  }
+
+  // spine: 有序章节列表
+  const spine: EpubSpineItem[] = [];
+  for (const itemref of extractTags(opfXml, "itemref")) {
+    const idref = itemref.attrs["idref"];
+    if (!idref) continue;
+    const href = manifest.get(idref);
+    if (href) {
+      spine.push({ id: idref, href: path.posix.join(opfDir, href) });
+    }
+  }
+
+  // TOC: 优先从 NCX (EPUB2) 解析，回退从 nav (EPUB3) 解析
+  const toc: EpubTocItem[] = [];
+  const ncxId = extractAttr(opfXml, "spine", "toc");
+  if (ncxId) {
+    const ncxHref = manifest.get(ncxId);
+    if (ncxHref) {
+      const ncxFile = zip.file(path.posix.join(opfDir, ncxHref));
+      if (ncxFile) {
+        const ncxXml = await ncxFile.async("string");
+        // 递归解析 navPoint
+        const parseNavPoints = (xml: string, parentTag: string, level: number) => {
+          const navPointRe = /<navPoint\b([^>]*?)>([\s\S]*?)<\/navPoint>/gi;
+          let m: RegExpExecArray | null;
+          // 需要只匹配直接子 navPoint，但正则无法精确做到。
+          // 改用：先提取所有 navPoint，根据 level 属性计算层级
+          const allNavPoints: { label: string; src: string; id: string }[] = [];
+          while ((m = navPointRe.exec(xml)) !== null) {
+            const attrs = parseAttrs(m[1]);
+            const body = m[2];
+            const labelMatch = /<navLabel[^>]*>([\s\S]*?)<\/navLabel>/i.exec(body);
+            const label = labelMatch ? labelMatch[1].replace(/<[^>]*>/g, "").trim() : "";
+            const contentMatch = /<content\b([^>]*?)\/?>/i.exec(body);
+            const src = contentMatch ? (parseAttrs(contentMatch[1]).src || "") : "";
+            const id = attrs.id || `${allNavPoints.length}`;
+            if (label) allNavPoints.push({ label, src, id });
+          }
+          // 按 playOrder 排序，层级通过 depth 属性或嵌套推断
+          // 简化处理：所有 NCX navPoint 视为 level 0，子项通过 playOrder 顺序排列
+          allNavPoints.forEach((np) => {
+            toc.push({ id: np.id, text: np.label, level: 0, src: np.src ? path.posix.join(opfDir, np.src) : undefined });
+          });
+          void parentTag;
+        };
+        parseNavPoints(ncxXml, "navMap", 0);
+      }
+    }
+  }
+
+  // 回退：EPUB3 nav 元素
+  if (toc.length === 0) {
+    // 查找 nav 类型的 manifest item
+    for (const [id, href] of manifest) {
+      const itemFile = zip.file(path.posix.join(opfDir, href));
+      if (!itemFile) continue;
+      const itemXml = await itemFile.async("string");
+      // 检查是否有 nav epub:type="toc"
+      if (!/epub:type\s*=\s*["']?toc/i.test(itemXml) && !/class\s*=\s*["']?[^"']*toc/i.test(itemXml)) continue;
+      // 解析 <li><a> 结构
+      const liRe = /<li\b[^>]*>([\s\S]*?)<\/li>/gi;
+      let liMatch: RegExpExecArray | null;
+      while ((liMatch = liRe.exec(itemXml)) !== null) {
+        const liBody = liMatch[1];
+        const aMatch = /<a\b([^>]*?)>([\s\S]*?)<\/a>/i.exec(liBody);
+        if (aMatch) {
+          const label = aMatch[2].replace(/<[^>]*>/g, "").trim();
+          const src = parseAttrs(aMatch[1]).href || "";
+          if (label) toc.push({ id: `${toc.length}`, text: label, level: 0, src: src ? path.posix.join(opfDir, src) : undefined });
+        }
+      }
+      if (toc.length > 0) break;
+      void id;
+    }
+  }
+
+  // 最终回退：用 spine 标题作为 TOC
+  if (toc.length === 0) {
+    spine.forEach((item, index) => {
+      toc.push({ id: `spine-${index}`, text: `${index + 1}`, level: 0, src: item.href });
+    });
+  }
+
+  const existingIndex = recentPaths.findIndex((item) => item.toLowerCase() === filePath.toLowerCase());
+  if (existingIndex >= 0) recentPaths.splice(existingIndex, 1);
+  recentPaths.unshift(filePath);
+  recentPaths.splice(10);
+  app.addRecentDocument(filePath);
+  createMenu();
+
+  epubMetaCache.set(filePath, { spine, toc });
+
+  return { filePath, name: path.basename(filePath), directory: path.dirname(filePath), title, author, toc, spine, size: stat.size };
+}
+
+type OpenedPdf = {
+  filePath: string;
+  name: string;
+  directory: string;
+  title: string;
+  size: number;
+};
+
+async function readPdfFile(filePath: string): Promise<OpenedPdf> {
+  const stat = await fs.promises.stat(filePath);
+  if (!stat.isFile()) throw new Error("Path is not a file.");
+  const existingIndex = recentPaths.findIndex((item) => item.toLowerCase() === filePath.toLowerCase());
+  if (existingIndex >= 0) recentPaths.splice(existingIndex, 1);
+  recentPaths.unshift(filePath);
+  recentPaths.splice(10);
+  app.addRecentDocument(filePath);
+  createMenu();
+  return {
+    filePath,
+    name: path.basename(filePath),
+    directory: path.dirname(filePath),
+    title: path.basename(filePath, path.extname(filePath)),
+    size: stat.size
+  };
+}
+
+async function readEpubSpineItem(filePath: string, spineIndex: number): Promise<string> {
+  const zip = epubCache.get(filePath);
+  const meta = epubMetaCache.get(filePath);
+  if (!zip || !meta) throw new Error("EPUB not loaded. Call readEpub first.");
+  if (spineIndex < 0 || spineIndex >= meta.spine.length) throw new Error("Spine index out of range.");
+  const href = meta.spine[spineIndex].href;
+  // 处理 href 中的锚点（如 chapter.xhtml#section1）
+  const basePath = href.split("#")[0];
+  const file = zip.file(basePath);
+  if (!file) throw new Error(`EPUB content not found: ${basePath}`);
+  let html = await file.async("string");
+
+  // 章节文件所在目录（用于解析相对路径的图片/CSS资源）
+  const chapterDir = path.posix.dirname(basePath);
+
+  // 1. 将 <link rel="stylesheet" href="..."> 内联为 <style>（匹配 href/rel 任意顺序）
+  const linkRe = /<link\b([^>]*?)\/?>/gi;
+  const cssPromises: { matchStr: string; cssText: string }[] = [];
+  let linkMatch: RegExpExecArray | null;
+  while ((linkMatch = linkRe.exec(html)) !== null) {
+    const attrs = parseAttrs(linkMatch[1]);
+    if (attrs.rel !== "stylesheet" || !attrs.href) continue;
+    const cssHref = attrs.href;
+    if (/^(https?:|data:)/i.test(cssHref)) continue;
+    try {
+      const cssPath = path.posix.normalize(path.posix.join(chapterDir, cssHref));
+      const cssFile = zip.file(cssPath);
+      if (cssFile) {
+        let cssText = await cssFile.async("string");
+        // 内联 CSS 中的 url() 引用（如背景图、字体）
+        cssText = await inlineCssUrlResources(zip, cssText, path.posix.dirname(cssPath));
+        // 移除 page-break 属性（屏幕阅读不需要分页）
+        cssText = cssText.replace(/page-break-(before|after|inside)\s*:\s*\w+/gi, "page-break-$1: avoid");
+        // 移除强制背景色（让主题色生效）
+        cssText = cssText.replace(/background-color\s*:\s*white\s*!/gi, "background-color: transparent !");
+        cssText = cssText.replace(/background-color\s*:\s*#fff\b/gi, "background-color: transparent");
+        cssPromises.push({ matchStr: linkMatch[0], cssText });
+      }
+    } catch { /* ignore */ }
+  }
+  for (const { matchStr, cssText } of cssPromises) {
+    html = html.replace(matchStr, `<style>\n${cssText}\n</style>`);
+  }
+
+  // 2. 将 <style> 标签内的 url() 引用也内联
+  const styleTagRe = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+  const stylePromises: { matchStr: string; cssText: string }[] = [];
+  let styleMatch: RegExpExecArray | null;
+  while ((styleMatch = styleTagRe.exec(html)) !== null) {
+    let originalCss = styleMatch[1];
+    originalCss = await inlineCssUrlResources(zip, originalCss, chapterDir);
+    // 同样处理 page-break 和 background-color
+    originalCss = originalCss.replace(/page-break-(before|after|inside)\s*:\s*\w+/gi, "page-break-$1: avoid");
+    originalCss = originalCss.replace(/background-color\s*:\s*white\s*!/gi, "background-color: transparent !");
+    originalCss = originalCss.replace(/background-color\s*:\s*#fff\b/gi, "background-color: transparent");
+    // 移除 body 的强制 color（让主题色生效）
+    originalCss = originalCss.replace(/(body[^{]*\{[^}]*?)color\s*:\s*black\s*;?/gi, "$1");
+    stylePromises.push({ matchStr: styleMatch[0], cssText: originalCss });
+  }
+  for (const { matchStr, cssText } of stylePromises) {
+    html = html.replace(matchStr, `<style>${cssText}</style>`);
+  }
+
+  // 3. 将 <img src="..."> 替换为 data URL
+  html = await inlineEpubResources(zip, html, /<img\b([^>]*?)\ssrc=["']([^"']+)["']/gi, chapterDir, 2);
+  // 4. 将 <image xlink:href="..." href="..."> 替换为 data URL（SVG 引用）
+  html = await inlineEpubResources(zip, html, /<image\b([^>]*?)\s(?:xlink:href|href)=["']([^"']+)["']/gi, chapterDir, 2);
+  // 5. 内部 <a href="chapter.xhtml"> 改为 href="#"
+  html = html.replace(/<a\b([^>]*?)\shref=["']([^"']+)["']/gi, (match, pre: string, h: string) => {
+    if (/^(https?:|mailto:|#)/i.test(h)) return match;
+    return `<a${pre} href="#" data-epub-internal="${h}"`;
+  });
+
+  // 6. 移除 <script> 标签
+  html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+
+  return html;
+}
+
+// 将 CSS 中的 url(...) 引用替换为 data URL
+async function inlineCssUrlResources(zip: JSZip, css: string, baseDir: string): Promise<string> {
+  const urlRe = /url\(\s*['"]?([^'")]+)['"]?\s*\)/gi;
+  const matches: { matchStr: string; resourcePath: string }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = urlRe.exec(css)) !== null) {
+    const url = m[1];
+    if (/^(https?:|data:|#)/i.test(url)) continue;
+    matches.push({ matchStr: m[0], resourcePath: url });
+  }
+
+  let result = css;
+  for (const { matchStr, resourcePath } of matches) {
+    try {
+      const fullPath = path.posix.normalize(path.posix.join(baseDir, resourcePath.split("#")[0]));
+      const resFile = zip.file(fullPath);
+      if (resFile) {
+        const ext = path.posix.extname(fullPath).toLowerCase();
+        const mimeMap: Record<string, string> = {
+          ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+          ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
+          ".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf", ".otf": "font/otf",
+        };
+        const mime = mimeMap[ext] || "application/octet-stream";
+        if (ext === ".svg") {
+          const svgText = await resFile.async("string");
+          result = result.replace(matchStr, `url("data:${mime};utf8,${encodeURIComponent(svgText)}")`);
+        } else {
+          const buffer = await resFile.async("base64");
+          result = result.replace(matchStr, `url("data:${mime};base64,${buffer}")`);
+        }
+      }
+    } catch { /* ignore */ }
+  }
+  return result;
+}
+
+// 将 HTML 中匹配的资源路径替换为 ZIP 内的 data URL
+async function inlineEpubResources(
+  zip: JSZip,
+  html: string,
+  re: RegExp,
+  baseDir: string,
+  hrefGroupIndex: number,
+): Promise<string> {
+  const promises: { match: string; replacement: string }[] = [];
+  const matches: { matchStr: string; href: string; fullMatch: string }[] = [];
+  let m: RegExpExecArray | null;
+  const reCopy = new RegExp(re.source, re.flags);
+  while ((m = reCopy.exec(html)) !== null) {
+    const href = m[hrefGroupIndex];
+    if (/^(https?:|data:|#)/i.test(href)) continue; // 外部链接/data URL/锚点跳过
+    matches.push({ matchStr: m[0], href, fullMatch: m[0] });
+  }
+
+  for (const { matchStr, href } of matches) {
+    try {
+      // 解析相对路径：去掉锚点，拼接 baseDir
+      const resourcePath = path.posix.normalize(path.posix.join(baseDir, href.split("#")[0]));
+      const resourceFile = zip.file(resourcePath);
+      if (resourceFile) {
+        const ext = path.posix.extname(resourcePath).toLowerCase();
+        const mimeMap: Record<string, string> = {
+          ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+          ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
+          ".bmp": "image/bmp", ".css": "text/css",
+        };
+        const mime = mimeMap[ext] || "application/octet-stream";
+        if (ext === ".svg") {
+          // SVG 可以直接内联为文本
+          const svgText = await resourceFile.async("string");
+          promises.push({ match: matchStr, replacement: matchStr.replace(href, `data:${mime};utf8,${encodeURIComponent(svgText)}`) });
+        } else {
+          const buffer = await resourceFile.async("base64");
+          promises.push({ match: matchStr, replacement: matchStr.replace(href, `data:${mime};base64,${buffer}`) });
+        }
+      }
+    } catch {
+      // 资源提取失败，保持原样
+    }
+  }
+
+  let result = html;
+  for (const { match, replacement } of promises) {
+    result = result.replace(match, replacement);
+  }
+  return result;
+}
+
 async function listDirectory(dirPath: string) {
   const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
   const children = entries
     .filter((entry) => !entry.name.startsWith("."))
-    .filter((entry) => entry.isDirectory() || isMarkdownLike(entry.name))
+    .filter((entry) => entry.isDirectory() || isMarkdownLike(entry.name) || isEpubFile(entry.name))
     .slice(0, 800)
     .map((entry) => {
       const childPath = path.join(dirPath, entry.name);
@@ -699,10 +1111,22 @@ function registerIpc() {
     const result = await dialog.showOpenDialog(owner, {
       title: t.openFile.replace("...", ""),
       properties: ["openFile"],
-      filters: [{ name: t.markdownFilter, extensions: ["md", "markdown", "txt"] }]
+      filters: [
+        { name: t.allSupportedFilter, extensions: ["md", "markdown", "txt", "epub", "pdf"] },
+        { name: t.markdownFilter, extensions: ["md", "markdown", "txt"] },
+        { name: "EPUB", extensions: ["epub"] },
+        { name: "PDF", extensions: ["pdf"] }
+      ]
     });
     if (result.canceled || !result.filePaths[0]) return null;
-    return readTextFile(result.filePaths[0]);
+    const selectedPath = result.filePaths[0];
+    if (isEpubFile(selectedPath)) {
+      return readEpubFile(selectedPath);
+    }
+    if (isPdfFile(selectedPath)) {
+      return readPdfFile(selectedPath);
+    }
+    return readTextFile(selectedPath);
   });
 
   ipcMain.handle("dialog:open-folder", async (event) => {
@@ -717,7 +1141,20 @@ function registerIpc() {
     return listDirectory(result.filePaths[0]);
   });
 
-  ipcMain.handle("file:read", async (_event, filePath: string) => readTextFile(filePath));
+  ipcMain.handle("file:read", async (_event, filePath: string) => {
+    if (isEpubFile(filePath)) return readEpubFile(filePath);
+    if (isPdfFile(filePath)) return readPdfFile(filePath);
+    return readTextFile(filePath);
+  });
+
+  ipcMain.handle("pdf:read", async (_event, filePath: string) => {
+    const buf = await fs.promises.readFile(filePath);
+    return new Uint8Array(buf);
+  });
+
+  ipcMain.handle("epub:read-spine", async (_event, filePath: string, spineIndex: number) =>
+    readEpubSpineItem(filePath, spineIndex)
+  );
 
   ipcMain.handle("file:save", async (_event, payload: SavePayload) => {
     const { filePath, content, expectedMtimeMs, force } = payload;
@@ -1026,7 +1463,7 @@ if (!hasSingleInstanceLock) {
 
   app.on("open-file", (event, filePath) => {
     event.preventDefault();
-    if (!isMarkdownLike(filePath)) return;
+    if (!isOpenableFile(filePath)) return;
     pendingOpenPath = filePath;
     if (mainWindow) sendOpenPath(filePath);
   });

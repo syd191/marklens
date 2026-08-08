@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { FindReplaceBar } from "./components/FindReplaceBar";
 import { AboutModal, PROJECT_REPOSITORY_URL } from "./components/AboutModal";
+import { EpubReader } from "./components/EpubReader";
+import { PdfReader } from "./components/PdfReader";
 import { MenuBar } from "./components/MenuBar";
 import { PreferencesModal } from "./components/PreferencesModal";
 import type { RichMarkdownEditorHandle } from "./components/RichMarkdownEditor";
@@ -16,7 +18,7 @@ import { i18n, resolveLanguage } from "./lib/i18n";
 import { buildOutline, getWordCount, renderMarkdownDocument, renderMermaidDiagrams, splitMarkdownIntoChunks } from "./lib/markdown";
 import { loadPreferences, savePreferences } from "./lib/storage";
 import { useDebouncedEffect } from "./lib/useDebouncedEffect";
-import type { AppLanguage, CurrentDocument, MarkdownChunk, OutlineItem, Preferences, ResolvedTheme, SaveStatus, SidebarTab } from "./types";
+import type { AppLanguage, CurrentDocument, EpubBook, EpubTocItem, MarkdownChunk, OutlineItem, Preferences, ResolvedTheme, SaveStatus, SidebarTab } from "./types";
 
 const browserLanguage = typeof navigator !== "undefined" ? navigator.language : "en-US";
 const initialSystemTheme: ResolvedTheme =
@@ -59,6 +61,10 @@ function getMatchCount(content: string, term: string) {
 
 export default function App() {
   const [document, setDocument] = useState<CurrentDocument>(() => createInitialDocument());
+  const [epubBook, setEpubBook] = useState<EpubBook | null>(null);
+  const [epubSpineIndex, setEpubSpineIndex] = useState(0);
+  const [epubProgress, setEpubProgress] = useState(0);
+  const [pdfBook, setPdfBook] = useState<OpenedPdf | null>(null);
   const [preferences, setPreferences] = useState<Preferences>(() => loadPreferences());
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(initialSystemTheme);
   const [systemLanguage, setSystemLanguage] = useState<AppLanguage>(initialLanguage);
@@ -108,6 +114,8 @@ export default function App() {
   const resolvedTheme: ResolvedTheme = preferences.themeMode === "system" ? systemTheme : preferences.themeMode;
   const language = resolveLanguage(preferences.languageMode, systemLanguage);
   const t = i18n[language];
+  const isEpubMode = epubBook !== null;
+  const isPdfMode = pdfBook !== null;
   const deferredContent = useDeferredValue(document.content);
   const shouldBuildOutline = preferences.preloadOutline || (sidebarOpen && sidebarTab === "outline");
   // chunks 仅在大纲需要时计算（侧栏关闭/非大纲 tab 时跳过全量切分）
@@ -126,8 +134,58 @@ export default function App() {
     savePreferences(next);
   }, []);
 
-  const openFilePayload = useCallback((payload: OpenedFile) => {
+  const openFilePayload = useCallback((payload: OpenedFile | OpenedEpub | OpenedPdf) => {
+    // EPUB 文件：进入阅读模式
+    if ("toc" in payload && "spine" in payload) {
+      startTransition(() => {
+        setEpubBook({
+          filePath: payload.filePath,
+          name: payload.name,
+          directory: payload.directory,
+          title: payload.title,
+          author: payload.author,
+          toc: payload.toc,
+          spine: payload.spine,
+          size: payload.size,
+        });
+        setEpubSpineIndex(0);
+        setEpubProgress(0);
+        setPdfBook(null);
+        setDocument(createInitialDocument());
+        setSaveStatus("clean");
+        setSearchTerm("");
+        setSidebarOpen(true);
+        setSidebarTab("outline");
+      });
+      lastAutoSavedContentRef.current = null;
+      window.markdownBridge?.watchFile(payload.filePath);
+      return;
+    }
+    // PDF 文件：进入阅读模式
+    if (!("content" in payload)) {
+      startTransition(() => {
+        setPdfBook({
+          filePath: payload.filePath,
+          name: payload.name,
+          directory: payload.directory,
+          title: payload.title,
+          size: payload.size,
+        });
+        setEpubBook(null);
+        setDocument(createInitialDocument());
+        setSaveStatus("clean");
+        setSearchTerm("");
+        setSidebarOpen(true);
+        setSidebarTab("outline");
+      });
+      lastAutoSavedContentRef.current = null;
+      window.markdownBridge?.watchFile(payload.filePath);
+      return;
+    }
+    // Markdown 文件：进入编辑模式
     startTransition(() => {
+      setEpubBook(null);
+      setPdfBook(null);
       setDocument({
         filePath: payload.filePath,
         name: payload.name,
@@ -358,6 +416,7 @@ export default function App() {
 
   const createNewDocument = useCallback(async () => {
     if (!(await confirmDocumentTransition())) return;
+    setEpubBook(null);
     setDocument(createInitialDocument());
     setSourceMode(true);
     setSaveStatus("unsaved");
@@ -411,6 +470,22 @@ export default function App() {
       }
     }
   }, [preferences.smoothScroll]);
+
+  const jumpToEpubToc = useCallback((item: EpubTocItem) => {
+    if (!epubBook || !item.src) return;
+    // TOC src 是相对 OPF 目录的路径（可能带锚点），spine href 是完整路径
+    const targetBase = item.src.split("#")[0];
+    const spineIdx = epubBook.spine.findIndex((s) => {
+      const spineBase = s.href.split("#")[0];
+      // 完全匹配、basename 匹配、或后缀匹配
+      return spineBase === targetBase ||
+        spineBase.endsWith("/" + targetBase) ||
+        spineBase.endsWith(targetBase);
+    });
+    if (spineIdx >= 0) {
+      setEpubSpineIndex(spineIdx);
+    }
+  }, [epubBook]);
 
   const jumpToSearchMatch = useCallback(
     (line: number) => {
@@ -833,13 +908,16 @@ export default function App() {
         currentPath={document.filePath}
         searchTerm={searchTerm}
         searchMatches={searchMatches}
+        epubToc={epubBook?.toc}
+        epubCurrentSpine={epubSpineIndex}
         onSetTab={setSidebarTab}
         onClose={closeSidebar}
         onJump={jumpToHeading}
+        onJumpToEpubToc={jumpToEpubToc}
         onOpenFolder={openFolderDialog}
         onOpenFile={openPath}
         onRootUpdate={setFileRoot}
-        onShowInFolder={showInFolder}
+        onShowInFolder={showProperties}
         onCreateMarkdown={createMarkdown}
         onCreateFolder={createFolder}
         onRenameEntry={renameEntry}
@@ -849,7 +927,20 @@ export default function App() {
       />
 
       <div className={`workspace${sidebarOpen ? " has-sidebar" : ""}`} ref={editorContainerRef}>
-        {sourceMode ? (
+        {isEpubMode && epubBook ? (
+          <EpubReader
+            book={epubBook}
+            spineIndex={epubSpineIndex}
+            theme={resolvedTheme === "night" ? "dark" : "light"}
+            onSpineChange={setEpubSpineIndex}
+            onScrollProgress={setEpubProgress}
+          />
+        ) : isPdfMode && pdfBook ? (
+          <PdfReader
+            book={pdfBook}
+            theme={resolvedTheme === "night" ? "dark" : "light"}
+          />
+        ) : sourceMode ? (
           <SourceEditor
             key={document.filePath ?? "untitled"}
             ref={editorRef}
@@ -931,7 +1022,7 @@ export default function App() {
         column={cursor.column}
         zoom={zoom}
         saveStatus={saveStatus}
-        currentName={document.filePath ? document.name : null}
+        currentName={epubBook ? epubBook.title : (pdfBook ? pdfBook.title : (document.filePath ? document.name : null))}
         onToggleSidebar={toggleSidebar}
         onToggleSource={() => setSourceMode((value) => !value)}
         onToggleFocus={() => setFocusMode((value) => !value)}

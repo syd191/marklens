@@ -22,7 +22,9 @@
   "dependencies": {
     "@mdit/plugin-katex": "^1.0.1",
     "@mdxeditor/editor": "^4.1.1",
+    "dompurify": "^3.4.13",
     "highlight.js": "^11.11.1",
+    "jszip": "^3.10.1",
     "katex": "^0.16.22",
     "lexical": "^0.48.0",
     "lucide-react": "^0.468.0",
@@ -33,6 +35,7 @@
     "markdown-it-task-lists": "^2.1.1",
     "markdown-it-toc-done-right": "^4.2.0",
     "mermaid": "^11.4.1",
+    "pdfjs-dist": "^4.10.38",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -40,6 +43,7 @@
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@types/dompurify": "^3.0.5",
     "@types/markdown-it": "^14.1.2",
     "@types/markdown-it-footnote": "^3.0.4",
     "@types/node": "^22.10.2",

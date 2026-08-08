@@ -9,7 +9,24 @@
     "dist/**/*",
     "dist-electron/**/*",
     "package.json",
-    "!node_modules/**/*"
+    "!node_modules/**/*",
+    "node_modules/jszip/**/*",
+    "node_modules/lie/**/*",
+    "node_modules/immediate/**/*",
+    "node_modules/pako/**/*",
+    "node_modules/core-js/**/*",
+    "node_modules/set-immediate-shim/**/*",
+    "node_modules/process-nextick-args/**/*",
+    "node_modules/util-deprecate/**/*",
+    "node_modules/readable-stream/**/*",
+    "node_modules/safe-buffer/**/*",
+    "node_modules/string_decoder/**/*",
+    "node_modules/inherits/**/*",
+    "node_modules/isarray/**/*",
+    "node_modules/bl/**/*",
+    "node_modules/buffer-alloc/**/*",
+    "node_modules/buffer-alloc-unsafe/**/*",
+    "node_modules/buffer-fill/**/*"
   ],
   "compression": "maximum",
   "afterPack": "scripts/afterPack.mjs",
@@ -45,6 +62,13 @@
       "description": "Markdown Document",
       "icon": "assets/icon.ico",
       "role": "Editor"
+    },
+    {
+      "ext": "epub",
+      "name": "EPUB Publication",
+      "description": "EPUB Publication",
+      "icon": "assets/icon.ico",
+      "role": "Viewer"
     }
   ]
 }

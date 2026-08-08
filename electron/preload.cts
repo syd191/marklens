@@ -12,6 +12,9 @@ contextBridge.exposeInMainWorld("markdownBridge", {
   openFileDialog: () => ipcRenderer.invoke("dialog:open-file"),
   openFolderDialog: () => ipcRenderer.invoke("dialog:open-folder"),
   readFile: (filePath: string) => ipcRenderer.invoke("file:read", filePath),
+  readEpubSpine: (filePath: string, spineIndex: number) =>
+    ipcRenderer.invoke("epub:read-spine", filePath, spineIndex),
+  readPdf: (filePath: string) => ipcRenderer.invoke("pdf:read", filePath),
   saveFile: (payload: { filePath: string; content: string; expectedMtimeMs?: number; force?: boolean }) =>
     ipcRenderer.invoke("file:save", payload),
   saveFileAs: (payload: { filePath?: string | null; content: string }) => ipcRenderer.invoke("file:save-as", payload),

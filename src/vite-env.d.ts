@@ -38,6 +38,37 @@ type OpenedFile = {
   size: number;
 };
 
+type EpubTocItem = {
+  id: string;
+  text: string;
+  level: number;
+  src?: string;
+};
+
+type EpubSpineItem = {
+  id: string;
+  href: string;
+};
+
+type OpenedEpub = {
+  filePath: string;
+  name: string;
+  directory: string;
+  title: string;
+  author: string;
+  toc: EpubTocItem[];
+  spine: EpubSpineItem[];
+  size: number;
+};
+
+type OpenedPdf = {
+  filePath: string;
+  name: string;
+  directory: string;
+  title: string;
+  size: number;
+};
+
 type DirectoryChild = {
   name: string;
   path: string;
@@ -59,9 +90,11 @@ type FileOperationResult =
   | { ok: false; reason: string };
 
 type MarkdownBridge = {
-  openFileDialog: () => Promise<OpenedFile | null>;
+  openFileDialog: () => Promise<OpenedFile | OpenedEpub | OpenedPdf | null>;
   openFolderDialog: () => Promise<DirectoryListing | null>;
-  readFile: (filePath: string) => Promise<OpenedFile>;
+  readFile: (filePath: string) => Promise<OpenedFile | OpenedEpub | OpenedPdf>;
+  readEpubSpine: (filePath: string, spineIndex: number) => Promise<string>;
+  readPdf: (filePath: string) => Promise<Uint8Array>;
   saveFile: (payload: {
     filePath: string;
     content: string;

@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="night">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MarkLens EPUB 浏览模式 - UI 效果图</title>
+<style>
+:root {
+  --bg: #1f1f1f;
+  --surface: #2b2b2b;
+  --surface-2: #363636;
+  --text: #eeeeee;
+  --muted: #c7c7c7;
+  --border: #4a4a4a;
+  --border-soft: #3a3a3a;
+  --accent: #8ab4f8;
+  --accent-soft: rgba(138, 180, 248, 0.18);
+  --danger: #ff8a80;
+  --code-bg: #2a2a2a;
+  --code-text: #e6edf3;
+  --status-height: 38px;
+  --titlebar-height: 32px;
+  --drawer-width: 268px;
+  --font-ui: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --font-doc: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--font-ui); background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; }
+
+/* ===== Menu Bar ===== */
+.menu-bar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: var(--titlebar-height); display: flex; align-items: center;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag; padding-left: 12px;
+  font-size: 12.5px; user-select: none;
+}
+.menu-top { position: relative; display: flex; align-items: center; }
+.menu-top-button {
+  padding: 4px 10px; border: 0; background: transparent; color: var(--text);
+  font-family: inherit; font-size: 12.5px; cursor: pointer; border-radius: 4px;
+  -webkit-app-region: no-drag;
+}
+.menu-top-button:hover, .menu-top-button.is-active { background: var(--surface-2); }
+.menu-drag-spacer { flex: 1; height: 100%; -webkit-app-region: drag; }
+.win-buttons { display: flex; -webkit-app-region: no-drag; }
+.win-btn { width: 46px; height: var(--titlebar-height); border: 0; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
+.win-btn:hover { background: var(--surface-2); }
+.win-btn.close:hover { background: #e81123; color: #fff; }
+
+/* ===== App Shell ===== */
+.app-shell {
+  display: grid; grid-template-rows: var(--titlebar-height) 1fr var(--status-height);
+  height: 100vh;
+}
+.workspace {
+  display: flex; overflow: hidden; padding-top: var(--titlebar-height);
+  height: calc(100vh - var(--status-height));
+}
+
+/* ===== Sidebar ===== */
+.sidebar-drawer {
+  position: fixed; z-index: 15; top: var(--titlebar-height);
+  bottom: var(--status-height); left: 0;
+  width: var(--drawer-width);
+  border-right: 1px solid var(--border); background: var(--surface);
+  display: flex; flex-direction: column;
+}
+.sidebar-tabs {
+  display: flex; border-bottom: 1px solid var(--border-soft);
+  padding: 0 4px; height: 36px; align-items: center; gap: 2px;
+}
+.sidebar-tab {
+  flex: 1; padding: 6px 8px; border: 0; background: transparent;
+  color: var(--muted); font-family: inherit; font-size: 12px;
+  cursor: pointer; border-radius: 5px; text-align: center;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+}
+.sidebar-tab.is-active { background: var(--surface-2); color: var(--text); }
+.sidebar-content { flex: 1; overflow-y: auto; padding: 8px 0; }
+
+/* EPUB TOC items */
+.epub-toc-item {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 6px 14px; border: 0; background: transparent;
+  color: var(--muted); font-family: inherit; font-size: 13px;
+  cursor: pointer; text-align: left; line-height: 1.4;
+}
+.epub-toc-item:hover { background: var(--surface-2); color: var(--text); }
+.epub-toc-item.is-current { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+.epub-toc-item .toc-level-0 { padding-left: 14px; }
+.epub-toc-item .toc-level-1 { padding-left: 28px; font-size: 12.5px; }
+.epub-toc-item .toc-level-2 { padding-left: 42px; font-size: 12px; color: var(--muted); }
+.epub-toc-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; border-radius: 4px;
+  background: var(--surface-2); color: var(--muted);
+  font-size: 10px; font-family: var(--font-mono); flex-shrink: 0;
+}
+.epub-toc-item.is-current .epub-toc-num { background: var(--accent); color: var(--bg); }
+
+/* ===== EPUB Reader Area ===== */
+.reader-area {
+  flex: 1; overflow-y: auto; display: flex; justify-content: center;
+  padding: 48px 40px 120px;
+}
+.epub-content {
+  width: min(860px, 100%);
+  font-family: var(--font-doc); font-size: 16px; line-height: 1.8;
+  color: var(--text);
+}
+.epub-content h1 { font-size: 28px; font-weight: 700; margin: 0 0 24px; padding-bottom: 12px; border-bottom: 1px solid var(--border-soft); }
+.epub-content h2 { font-size: 22px; font-weight: 600; margin: 36px 0 16px; }
+.epub-content h3 { font-size: 18px; font-weight: 600; margin: 28px 0 12px; }
+.epub-content p { margin: 0 0 16px; }
+.epub-content blockquote {
+  margin: 16px 0; padding: 12px 20px; border-left: 3px solid var(--accent);
+  background: var(--surface); border-radius: 0 6px 6px 0; color: var(--muted);
+}
+.epub-content blockquote p { margin: 0; }
+.epub-content code {
+  font-family: var(--font-mono); font-size: 14px; padding: 2px 6px;
+  background: var(--code-bg); border-radius: 4px; color: var(--code-text);
+}
+.epub-content pre {
+  margin: 16px 0; padding: 16px 20px; background: var(--code-bg);
+  border-radius: 8px; overflow-x: auto; border: 1px solid var(--border-soft);
+}
+.epub-content pre code { padding: 0; background: transparent; }
+.epub-content img { max-width: 100%; border-radius: 8px; margin: 16px 0; }
+.epub-content .epub-figcap {
+  text-align: center; font-size: 13px; color: var(--muted); margin-top: -8px; margin-bottom: 24px;
+}
+
+/* Chapter nav */
+.chapter-nav {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border-soft);
+}
+.chapter-nav-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 18px; border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); font-family: inherit; font-size: 13px;
+  cursor: pointer; border-radius: 6px; transition: background 120ms;
+}
+.chapter-nav-btn:hover { background: var(--surface-2); }
+.chapter-nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.chapter-nav-btn .label { font-size: 11px; color: var(--muted); }
+
+/* Reading progress bar */
+.reading-progress {
+  position: fixed; top: var(--titlebar-height); left: 0; right: 0;
+  height: 2px; background: transparent; z-index: 14; pointer-events: none;
+}
+.reading-progress-bar {
+  height: 100%; background: var(--accent); transition: width 200ms ease;
+  width: 32%;
+}
+
+/* ===== Status Bar ===== */
+.status-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+  display: grid; grid-template-columns: auto minmax(0,1fr) auto;
+  align-items: center; height: var(--status-height); padding: 0 14px;
+  border-top: 1px solid var(--border); background: var(--bg);
+  color: var(--muted); font-size: 12.5px;
+}
+.status-left, .status-right { display: flex; align-items: center; gap: 6px; }
+.status-right { justify-content: flex-end; gap: 14px; white-space: nowrap; }
+.status-path { overflow: hidden; padding: 0 16px; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+.status-icon-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: 0; background: transparent;
+  color: var(--muted); cursor: pointer; border-radius: 5px;
+}
+.status-icon-btn:hover { background: var(--surface-2); color: var(--text); }
+.status-icon-btn.is-active { color: var(--accent); background: var(--accent-soft); }
+.status-divider { width: 1px; height: 16px; background: var(--border-soft); }
+
+/* SVG icons inline */
+svg { display: inline-block; vertical-align: middle; }
+
+/* Mockup label */
+.mockup-label {
+  position: fixed; top: 6px; right: 160px; z-index: 200;
+  font-size: 10px; color: var(--accent); background: var(--accent-soft);
+  padding: 2px 10px; border-radius: 10px; pointer-events: none;
+  letter-spacing: 0.5px; -webkit-app-region: no-drag;
+}
+</style>
+</head>
+<body>
+
+<!-- Menu Bar -->
+<div class="menu-bar">
+  <div class="menu-top">
+    <button class="menu-top-button">文件</button>
+  </div>
+  <div class="menu-top">
+    <button class="menu-top-button">视图</button>
+  </div>
+  <div class="menu-top">
+    <button class="menu-top-button is-active">主题</button>
+  </div>
+  <div class="menu-top">
+    <button class="menu-top-button">帮助</button>
+  </div>
+  <div class="menu-drag-spacer"></div>
+  <div class="win-buttons">
+    <button class="win-btn">—</button>
+    <button class="win-btn">▢</button>
+    <button class="win-btn close">✕</button>
+  </div>
+</div>
+
+<div class="mockup-label">打开 .epub 文件时自动进入阅读视图 · UI 效果图</div>
+
+<!-- Reading progress bar -->
+<div class="reading-progress">
+  <div class="reading-progress-bar"></div>
+</div>
+
+<!-- App Shell -->
+<div class="app-shell">
+  <div class="workspace">
+
+    <!-- Sidebar with EPUB TOC -->
+    <aside class="sidebar-drawer">
+      <div class="sidebar-tabs">
+        <button class="sidebar-tab is-active">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h12"/></svg>
+          目录
+        </button>
+        <button class="sidebar-tab" style="opacity:0.4;cursor:not-allowed">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          搜索
+        </button>
+      </div>
+      <div class="sidebar-content">
+        <!-- Book title -->
+        <div style="padding:10px 14px 6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">深入理解计算机系统</div>
+
+        <button class="epub-toc-item toc-level-0">
+          <span class="epub-toc-num">1</span>
+          <span>计算机系统漫游</span>
+        </button>
+        <button class="epub-toc-item toc-level-1">
+          <span>1.1 信息就是位 + 上下文</span>
+        </button>
+        <button class="epub-toc-item toc-level-1">
+          <span>1.2 程序被其他程序翻译成不同格式</span>
+        </button>
+        <button class="epub-toc-item toc-level-1">
+          <span>1.3 了解编译系统如何工作</span>
+        </button>
+        <button class="epub-toc-item toc-level-1">
+          <span>1.4 处理器读并解释内存中的指令</span>
+        </button>
+
+        <button class="epub-toc-item toc-level-0">
+          <span class="epub-toc-num">2</span>
+          <span>信息的表示和处理</span>
+        </button>
+        <button class="epub-toc-item toc-level-1">
+          <span>2.1 信息存储</span>
+        </button>
+        <button class="epub-toc-item toc-level-1">
+          <span>2.2 整数表示</span>
+        </button>
+
+        <button class="epub-toc-item toc-level-0 is-current">
+          <span class="epub-toc-num">3</span>
+          <span>机器级表示</span>
+        </button>
+        <button class="epub-toc-item toc-level-1">
+          <span>3.1 历史视角</span>
+        </button>
+        <button class="epub-toc-item toc-level-1" style="background:var(--surface-2);">
+          <span style="color:var(--accent);font-weight:500;">3.2 程序编码</span>
+        </button>
+        <button class="epub-toc-item toc-level-1">
+          <span>3.3 数据格式</span>
+        </button>
+        <button class="epub-toc-item toc-level-1">
+          <span>3.4 访问信息</span>
+        </button>
+        <button class="epub-toc-item toc-level-2">
+          <span>3.4.1 操作数指示符</span>
+        </button>
+        <button class="epub-toc-item toc-level-2">
+          <span>3.4.2 数据传送指令</span>
+        </button>
+        <button class="epub-toc-item toc-level-1">
+          <span>3.5 算术和逻辑操作</span>
+        </button>
+
+        <button class="epub-toc-item toc-level-0">
+          <span class="epub-toc-num">4</span>
+          <span>处理器体系结构</span>
+        </button>
+        <button class="epub-toc-item toc-level-0">
+          <span class="epub-toc-num">5</span>
+          <span>优化程序性能</span>
+        </button>
+        <button class="epub-toc-item toc-level-0">
+          <span class="epub-toc-num">6</span>
+          <span>存储器层次结构</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- EPUB Reading Area -->
+    <main class="reader-area">
+      <article class="epub-content">
+
+        <h1>第 3 章 机器级表示</h1>
+
+        <p>当我们在高级语言（如 C）中编写程序时，代码被编译器翻译成机器级代码。要理解机器级代码，我们需要考察编译器以及它生成的代码。本章我们首先介绍历史视角，然后深入程序编码的具体细节。</p>
+
+        <h2>3.2 程序编码</h2>
+
+        <p>假设我们写了一个 C 语言文件 <code>p1.c</code>，可以用如下命令行调用 GCC 编译器来生成可执行文件：</p>
+
+        <pre><code>linux&gt; gcc -Og -o p p1.c main.c</code></pre>
+
+        <p>选项 <code>-Og</code> 告诉编译器使用会生成符合原始 C 代码整体结构的机器代码的优化等级。较高级别的优化（如 <code>-O2</code>）会产生严重变形的代码，使其更难理解。</p>
+
+        <blockquote>
+          <p>实际上，GCC 调用一系列程序将源代码转化成可执行代码。首先，C 预处理器扩展源代码，插入所有用 <code>#include</code> 命令指定的文件，并展开所有用 <code>#define</code> 声明的宏。然后，编译器产生源文件的汇编代码。接下来，汇编器将汇编代码转化成二进制目标代码文件。最后，链接器将目标代码文件与库函数合并，产生最终的可执行代码文件。</p>
+        </blockquote>
+
+        <h3>3.2.1 机器级代码</h3>
+
+        <p>对于机器级编程来说，两种抽象尤为重要。第一种是由指令集体系结构（ISA）来定义机器级程序的格式和行为，它定义了处理器状态、指令的格式，以及每条指令对状态的影响。第二种抽象是，机器级程序使用的内存地址是虚拟地址，提供的内存模型看上去是一个非常大的字节数组。</p>
+
+        <p>图 3-1 展示了 C 语言、汇编代码和机器代码之间的关系：</p>
+
+        <div style="text-align:center;margin:24px 0;">
+          <div style="display:inline-block;padding:20px 40px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-family:var(--font-mono);font-size:13px;color:var(--muted);">
+            <div>C 代码 (p1.c)</div>
+            <div style="margin:8px 0;color:var(--accent);">↓ gcc -Og -S</div>
+            <div>汇编代码 (p1.s)</div>
+            <div style="margin:8px 0;color:var(--accent);">↓ as</div>
+            <div>目标代码 (p1.o)</div>
+            <div style="margin:8px 0;color:var(--accent);">↓ ld</div>
+            <div>可执行文件 (p)</div>
+          </div>
+          <div class="epub-figcap">图 3-1 编译过程</div>
+        </div>
+
+        <p>在整个编译过程中，编译器完成了大部分工作。它将 C 语言的特性映射到机器级特性，决定哪些值保存在寄存器中，哪些保存在内存中，以及选择哪些指令来实现操作。</p>
+
+        <!-- Chapter Navigation -->
+        <div class="chapter-nav">
+          <button class="chapter-nav-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+            <span>
+              <div class="label">上一章</div>
+              <div>第 2 章 信息的表示和处理</div>
+            </span>
+          </button>
+          <button class="chapter-nav-btn">
+            <span style="text-align:right;">
+              <div class="label">下一章</div>
+              <div>第 4 章 处理器体系结构</div>
+            </span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+
+      </article>
+    </main>
+
+  </div>
+</div>
+
+<!-- Status Bar -->
+<footer class="status-bar">
+  <div class="status-left">
+    <button class="status-icon-btn is-active" title="侧栏">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+    </button>
+    <button class="status-icon-btn is-active" title="专注模式">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+    <button class="status-icon-btn" title="打字机模式">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h10M4 17h16"/></svg>
+    </button>
+    <div class="status-divider"></div>
+    <button class="status-icon-btn" title="目录">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+    </button>
+  </div>
+  <div class="status-path">深入理解计算机系统 · 第 3 章 机器级表示 · 3.2 程序编码</div>
+  <div class="status-right">
+    <span>第 3 章 / 共 12 章</span>
+    <div class="status-divider"></div>
+    <span>32%</span>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -38,3 +38,26 @@ export type CurrentDocument = {
   mtimeMs?: number;
   size?: number;
 };
+
+export type EpubBook = {
+  filePath: string;
+  name: string;
+  directory: string;
+  title: string;
+  author: string;
+  toc: EpubTocItem[];
+  spine: EpubSpineItem[];
+  size: number;
+};
+
+export type EpubTocItem = {
+  id: string;
+  text: string;
+  level: number;
+  src?: string;
+};
+
+export type EpubSpineItem = {
+  id: string;
+  href: string;
+};
