@@ -40,4 +40,13 @@ describe("editor commands", () => {
     // 标题和加粗被清理，但图片和链接语法保留
     expect(result.value).toBe("Title\nbold ![alt text](image.png) [link](https://example.com)");
   });
+
+  it("inserts front matter only at the document start", () => {
+    const result = applyMarkdownCommand("# Existing body", { start: 15, end: 15 }, "front-matter");
+    expect(result.value).toMatch(/^---\ntitle: \ndate: \ntags: \[\]\n---\n\n# Existing body$/);
+    expect(result.start).toBe("---\ntitle: ".length);
+
+    const existing = applyMarkdownCommand("---\ntitle: Existing\n---\n\n# Body", { start: 0, end: 0 }, "front-matter");
+    expect(existing.value).toBe("---\ntitle: Existing\n---\n\n# Body");
+  });
 });

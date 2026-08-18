@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  analyzeRichMarkdownCompatibility,
   buildOutline,
   getWordCount,
   renderMarkdownDocument,
   renderMarkdownChunk,
+  parseMarkdownFrontMatter,
   slugify,
   splitMarkdownIntoChunks
 } from "./markdown";
@@ -28,6 +30,31 @@ describe("markdown rendering", () => {
   it("does not mistake an unclosed leading horizontal rule for front matter", () => {
     const chunks = splitMarkdownIntoChunks("---\n\n# Body");
     expect(buildOutline(chunks).map((item) => item.text)).toEqual(["Body"]);
+    const html = renderMarkdownDocument("---\n\n# Body", null);
+    expect(html).toContain("<hr>");
+    expect(html).toContain("Body");
+  });
+
+  it("does not hide ordinary content between thematic breaks", () => {
+    const markdown = "---\n# This is a heading\nVisible body\n\n---\n\n# After";
+    expect(parseMarkdownFrontMatter(markdown)).toBeNull();
+
+    const html = renderMarkdownDocument(markdown, null);
+    expect(html).toContain("This is a heading");
+    expect(html).toContain("Visible body");
+    expect(html).toContain("After");
+    expect(html.match(/<hr>/g)).toHaveLength(2);
+  });
+
+  it("accepts only a closed non-empty YAML mapping as front matter", () => {
+    expect(parseMarkdownFrontMatter("---\ntitle: Hello\ntags:\n  - docs\n---\n# Body")?.data).toMatchObject({
+      title: "Hello",
+      tags: ["docs"]
+    });
+    expect(parseMarkdownFrontMatter("---\nplain body\n---\n# Body")).toBeNull();
+    expect(parseMarkdownFrontMatter("---\n# comment only\n---\n# Body")).toBeNull();
+    expect(parseMarkdownFrontMatter("---\nbase: &base {x: 1}\ncopy: *base\n---\n# Body")).toBeNull();
+    expect(parseMarkdownFrontMatter("---\n<<: {x: 1}\n---\n# Body")).toBeNull();
   });
 
   it("keeps stable heading ids for English and Chinese headings", () => {
@@ -40,11 +67,12 @@ describe("markdown rendering", () => {
     expect(html).toContain('id="preview-3-0"');
   });
 
-  it("renders math but escapes raw HTML by default", () => {
-    const html = renderMarkdownDocument("<img src=x onerror=alert(1)>\n\nInline $E = mc^2$.", null);
+  it("renders math and sanitizes raw HTML", () => {
+    const html = renderMarkdownDocument("<img src=x onerror=alert(1)><script>alert(2)</script>\n\nInline $E = mc^2$.", null);
 
-    expect(html).toContain("&lt;img");
-    expect(html).not.toContain("<img src=x");
+    expect(html).toContain("<img");
+    expect(html).not.toContain("onerror");
+    expect(html).not.toContain("<script");
     expect(html).toContain("katex");
   });
 
@@ -86,5 +114,33 @@ describe("markdown rendering", () => {
     expect(html).not.toContain("<hr");
     expect(html).toContain("<h1");
     expect(html).toContain("Body");
+  });
+
+  it("routes syntax unsupported by the rich editor to the complete preview", () => {
+    const result = analyzeRichMarkdownCompatibility([
+      "Inline $E = mc^2$.",
+      "```mermaid",
+      "graph TD",
+      "```",
+      "Text[^1]",
+      "[^1]: Note",
+      "[TOC]",
+      "<details>content</details>"
+    ].join("\n"));
+
+    expect(result.requiresDocumentPreview).toBe(true);
+    expect(result.features).toEqual(["math", "mermaid", "footnote", "toc", "raw-html"]);
+  });
+
+  it("routes valid front matter to the property-preserving preview", () => {
+    expect(analyzeRichMarkdownCompatibility("---\ntitle: Hello\ntags: [docs]\n---\n\n# Body")).toEqual({
+      features: ["frontmatter"],
+      requiresDocumentPreview: true
+    });
+  });
+
+  it("ignores advanced-looking syntax inside code", () => {
+    const result = analyzeRichMarkdownCompatibility("`$not-math$`\n\n```md\n[TOC]\n[^1]\n<div>\n```");
+    expect(result).toEqual({ features: [], requiresDocumentPreview: false });
   });
 });

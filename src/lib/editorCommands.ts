@@ -1,3 +1,5 @@
+import { parseMarkdownFrontMatter } from "./markdown";
+
 export type EditorSelection = {
   start: number;
   end: number;
@@ -235,8 +237,12 @@ export function applyMarkdownCommand(
       return insertBlock(value, selection, "---\n$CURSOR$");
     case "toc":
       return insertBlock(value, selection, "[TOC]\n$CURSOR$");
-    case "front-matter":
-      return insertBlock(value, selection, "---\ntitle: $CURSOR$\ndate: \ntags: []\n---\n");
+    case "front-matter": {
+      if (parseMarkdownFrontMatter(value)) return { value, ...selection };
+      const block = "---\ntitle: \ndate: \ntags: []\n---\n\n";
+      const cursor = block.indexOf("title: ") + "title: ".length;
+      return { value: `${block}${value}`, start: cursor, end: cursor };
+    }
   }
 
   return { value, ...selection };

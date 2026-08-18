@@ -2,6 +2,26 @@
 
 All notable changes to MarkLens are documented here.
 
+## 0.2.4 - 2026-08-19
+
+### Added
+
+- Add a normal ZIP distribution for managed enterprise deployment and an optional per-machine MSI build (`npm run dist:enterprise`).
+- Add post-build validation with SHA-256 hashes, required runtime-file checks, signature reporting, and a machine-readable build manifest.
+- Add local startup diagnostics for page-load, renderer, GPU child-process, and unresponsive-window failures.
+
+### Changed
+
+- Make the default NSIS installer one-click per-user, stop auto-launching after install, use normal compression, and force the compatible BCJ executable filter.
+- Preserve SwiftShader/Vulkan software-rendering files and Traditional Chinese Electron locale resources for heterogeneous enterprise PCs.
+
+### Fixed
+
+- Prevent ordinary or unclosed `---` thematic breaks from being misclassified as YAML front matter and hiding document content.
+- Restore readable rich-editor text colors when the MDXEditor stylesheet is loaded lazily in dark themes.
+- Render math, Mermaid, footnotes, table of contents, and raw HTML safely through the complete document preview instead of silently dropping or approximating them in rich mode.
+- Show valid YAML front matter as visible document properties with a source-edit path rather than an empty rich-text block.
+
 ## 0.2.3 - 2026-08-06
 
 ### Added

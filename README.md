@@ -8,31 +8,27 @@ MarkLens 的核心体验是“正文优先”：默认隐藏侧栏，打开文�
 
 ## 下载
 
-当前项目版本是 **v0.2.3**。已发布的 Windows 构建可从 [Releases 页面](https://github.com/syd191/marklens/releases) 下载；执行 `npm run dist` 时会生成：
+当前项目版本是 **v0.2.4**。已发布的 Windows 构建可从 [Releases 页面](https://github.com/syd191/marklens/releases) 下载；执行 `npm run dist` 时会生成：
 
-- `MarkLens Setup 0.2.3.exe`：安装包。
-- `MarkLens-0.2.3-x64-portable.exe`：便携版。
+- `MarkLens-Setup-0.2.4-x64.exe`：当前用户安装包。
+- `MarkLens-0.2.4-x64.zip`：普通 ZIP 版，推荐公司内网分发。
 
 > Windows 构建目前未进行代码签名，首次运行时可能出现 Microsoft Defender SmartScreen 提示。
 
 ## 界面截图
 
-MarkLens 0.2.1 正文优先的所见即所得编辑界面：
+MarkLens 0.2.4 完整 Markdown 预览界面：
 
-![MarkLens 0.2.1 所见即所得编辑界面](docs/screenshots/reading-night.png)
+![MarkLens 0.2.4 完整 Markdown 预览界面](docs/screenshots/reading-night.png)
 
-MarkLens 0.2.1 大纲导航：
+MarkLens 0.2.4 大纲导航：
 
-![MarkLens 0.2.1 大纲界面](docs/screenshots/outline-night.png)
-
-MarkLens 0.2.1 当前目录文件浏览：
-
-![MarkLens 0.2.1 文件界面](docs/screenshots/files-night.png)
+![MarkLens 0.2.4 大纲界面](docs/screenshots/outline-night.png)
 
 ## 功能
 
 - 打开 `.md`、`.markdown` 和 `.txt` 文件。
-- 默认使用所见即所得编辑器，标题、列表、表格、代码块、引用、链接与图片可以直接编辑。
+- 默认使用源码编辑器；普通 CommonMark/GFM 文档可切换到所见即所得编辑，高级语法使用完整文档预览。
 - 自动生成文档大纲，并支持点击标题跳转。
 - 侧栏提供大纲、文档列表/文件树和全文搜索。
 - Files 页支持右键操作：打开文件位置、新建 MD 文件、新建文件夹、重命名文件和文件夹。
@@ -45,6 +41,7 @@ MarkLens 0.2.1 当前目录文件浏览：
 - 支持 Github、Newsprint、Night、Pixyll、Whitey 和跟随系统主题。
 - 自定义 HTML 菜单栏随主题动态换色，并保留全部快捷键。
 - 默认跟随系统语言，内置简体中文、繁体中文和英文界面。
+- 提供当前用户 NSIS、普通 ZIP、便携版和供 IT 部署的 per-machine MSI 构建方式。
 
 ## Markdown 支持
 
@@ -62,18 +59,17 @@ MarkLens 0.2.1 当前目录文件浏览：
 
 MarkLens 以快速打开和流畅浏览 Markdown 为目标：
 
-- 主窗口等首屏 UI 准备好后再显示，减少启动白屏。
+- 主窗口立即显示主题背景，避免渲染失败时窗口永久隐藏；启动异常写入本地日志。
 - 初始 HTML 会提前应用保存的主题或系统主题，减少主题闪烁。
-- 长 Markdown 文档的交互式只读预览按块处理。
-- 先渲染首屏内容，剩余内容在空闲时间继续渲染。
-- 导出和复制 HTML 时整篇解析一次，保证目录、脚注和 Front Matter 的文档级语义正确。
+- 富文本编辑器按需加载，启动源码模式时不载入 Lexical/MDXEditor 大包。
+- 公式、Mermaid、脚注、目录、Front Matter 和 HTML 使用整篇解析，保证文档级语义正确。
 - 大纲默认延后生成，在需要时再计算。
-- Mermaid 图表靠近可视区域后再渲染。
+- Mermaid 图表库按需加载，并逐块生成隔离 SVG。
 - 文件树按目录懒加载，展开目录时再读取子项。
 
 ## 安全默认值
 
-- Markdown 中的原始 HTML 默认转义。
+- Markdown 原始 HTML 经过 DOMPurify 清洗；安全标签保留，脚本和事件属性会被移除。
 - Electron 开启 context isolation 和 sandbox。
 - 文件访问限制在 Markdown 类文本文件。
 - 自动保存是可选项，并在写入前严格检查文件修改时间，避免静默覆盖外部修改。
@@ -104,13 +100,17 @@ npm run dev
 npm run check
 ```
 
-构建 Windows 安装包和便携版：
+构建 Windows 安装包和普通 ZIP 版：
 
 ```bash
 npm run dist
 ```
 
-构建产物会输出到项目目录上级的 `../../outputs`。
+构建便携版使用 `npm run pack`；构建供 IT 部署的 per-machine MSI 使用 `npm run dist:enterprise`。
+
+正式企业发布应通过 electron-builder 的 `CSC_LINK` / `CSC_KEY_PASSWORD` 配置代码签名，并设置 `$env:MARKLENS_REQUIRE_SIGNING="1"`，使未签名构建直接失败。
+
+构建产物会输出到项目内的 `dist-build/`，同时生成包含哈希、签名状态和运行库检查结果的 `build-manifest.json`。
 
 ## 项目结构
 
@@ -119,7 +119,7 @@ npm run dist
 - `src/components/RichMarkdownEditor.tsx`：所见即所得 Markdown 编辑器和编辑命令桥接。
 - `src/components/SourceEditor.tsx`：源码编辑器、历史记录、查找和选区操作。
 - `src/lib/editorCommands.ts`：可测试的 Markdown 文本命令。
-- `src/lib/markdown.ts`：Markdown 分块、大纲提取、渐进预览和整篇文档渲染。
+- `src/lib/markdown.ts`：严格 Front Matter 识别、大纲提取、兼容性分析、安全 HTML 和整篇文档渲染。
 - `src/lib/i18n.ts`：简体中文、繁体中文、英文界面文案和语言解析。
 - `assets/`：应用图标源文件。
 - `docs/`：架构和维护说明。

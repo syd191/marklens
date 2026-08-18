@@ -1,9 +1,9 @@
-// 打包后清理：删除多余 Electron 语言包（仅保留 en-US / zh-CN）及软件渲染后备库，
-// 减小最终应用体积。仅在 win 平台生效。
+// 打包后只裁剪未使用的 Electron 语言包。GPU/SwiftShader 软件渲染后备
+// 必须保留，企业电脑、远程桌面、虚拟机和旧驱动可能依赖这些文件启动。
 import fs from "node:fs";
 import path from "node:path";
 
-const KEEP_LOCALES = new Set(["en-US.pak", "zh-CN.pak"]);
+const KEEP_LOCALES = new Set(["en-US.pak", "zh-CN.pak", "zh-TW.pak"]);
 
 export default async function afterPack(context) {
   if (context.electronPlatformName !== "win32") return;
@@ -20,16 +20,6 @@ export default async function afterPack(context) {
           // 忽略无法删除的文件
         }
       }
-    }
-  }
-
-  // 2) 移除软件 Vulkan 渲染后备（Windows 通常有硬件 GPU），省 5MB+
-  const swiftshader = path.join(appOutDir, "vk_swiftshader.dll");
-  if (fs.existsSync(swiftshader)) {
-    try {
-      fs.unlinkSync(swiftshader);
-    } catch {
-      // 忽略
     }
   }
 }

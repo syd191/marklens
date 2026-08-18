@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useR
 import { FindReplaceBar } from "./components/FindReplaceBar";
 import { AboutModal, PROJECT_REPOSITORY_URL } from "./components/AboutModal";
 import { MenuBar } from "./components/MenuBar";
+import { MarkdownPreview } from "./components/MarkdownPreview";
 import { PreferencesModal } from "./components/PreferencesModal";
 import type { RichMarkdownEditorHandle } from "./components/RichMarkdownEditor";
 // 富文本编辑器依赖庞大的 MDXEditor/Lexical，仅在使用时才加载，避免拖慢首屏（启动默认源码模式用不到）
@@ -13,7 +14,14 @@ import { SourceEditor, type CursorPosition, type SourceEditorHandle } from "./co
 import { StatusBar } from "./components/StatusBar";
 import { WordCountModal } from "./components/WordCountModal";
 import { i18n, resolveLanguage } from "./lib/i18n";
-import { buildOutline, getWordCount, renderMarkdownDocument, renderMermaidDiagrams, splitMarkdownIntoChunks } from "./lib/markdown";
+import {
+  analyzeRichMarkdownCompatibility,
+  buildOutline,
+  getWordCount,
+  renderMarkdownDocument,
+  renderMermaidDiagrams,
+  splitMarkdownIntoChunks
+} from "./lib/markdown";
 import { loadPreferences, savePreferences } from "./lib/storage";
 import { useDebouncedEffect } from "./lib/useDebouncedEffect";
 import type { AppLanguage, CurrentDocument, MarkdownChunk, OutlineItem, Preferences, ResolvedTheme, SaveStatus, SidebarTab } from "./types";
@@ -120,6 +128,10 @@ export default function App() {
   const wordCount = useMemo(() => getWordCount(deferredContent), [deferredContent]);
   const searchMatches = useMemo(() => getMatches(deferredContent, searchTerm), [deferredContent, searchTerm]);
   const findMatchCount = useMemo(() => getMatchCount(deferredContent, searchTerm), [deferredContent, searchTerm]);
+  const richCompatibility = useMemo(
+    () => analyzeRichMarkdownCompatibility(document.content),
+    [document.content]
+  );
 
   const updatePreferences = useCallback((next: Preferences) => {
     setPreferences(next);
@@ -860,6 +872,17 @@ export default function App() {
             typewriterMode={typewriterMode}
             onChange={onContentChange}
             onCursorChange={setCursor}
+          />
+        ) : richCompatibility.requiresDocumentPreview ? (
+          <MarkdownPreview
+            markdown={document.content}
+            baseDirectory={document.directory}
+            fontSize={preferences.fontSize}
+            theme={resolvedTheme}
+            notice={t.preview.advancedNotice}
+            editLabel={t.preview.editSource}
+            frontMatterLabel={t.preview.documentProperties}
+            onEditSource={requestSourceMode}
           />
         ) : (
           <Suspense fallback={<div className="rich-editor-shell" />}>

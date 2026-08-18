@@ -19,11 +19,34 @@ const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
 let pendingOpenPath: string | null = null;
+let startupLogPath: string | null = null;
 const fileWatchers = new Map<number, {
   filePath: string;
   watcher: fs.FSWatcher;
   timer: NodeJS.Timeout | null;
 }>();
+
+function initializeStartupLog() {
+  try {
+    app.setAppLogsPath();
+    startupLogPath = path.join(app.getPath("logs"), "startup.log");
+    if (fs.existsSync(startupLogPath) && fs.statSync(startupLogPath).size > 1024 * 1024) {
+      fs.writeFileSync(startupLogPath, "", "utf8");
+    }
+  } catch {
+    startupLogPath = null;
+  }
+}
+
+function logStartup(event: string, details?: Record<string, unknown>) {
+  if (!startupLogPath) return;
+  try {
+    const entry = `${new Date().toISOString()} ${event}${details ? ` ${JSON.stringify(details)}` : ""}\n`;
+    fs.appendFileSync(startupLogPath, entry, "utf8");
+  } catch {
+    // Startup diagnostics must never prevent the app from opening.
+  }
+}
 const watcherCleanupRegistered = new Set<number>();
 const forceCloseWindows = new Set<number>();
 const recentPaths: string[] = [];
@@ -480,7 +503,7 @@ function createWindow() {
     minWidth: 860,
     minHeight: 560,
     title: productName,
-    show: false,
+    show: true,
     backgroundColor: getSystemTheme() === "night" ? "#1f1f1f" : "#ffffff",
     icon: path.join(__dirname, "../assets/icon.ico"),
     // 自定义标题栏：保留系统按钮（最小化/最大化/关闭），背景色与符号色可控，
@@ -502,14 +525,22 @@ function createWindow() {
   const webContentsId = window.webContents.id;
 
   if (isDev) {
-    window.loadURL(devUrl);
+    void window.loadURL(devUrl).catch((error) => logStartup("load-url-failed", { message: String(error) }));
   } else {
-    window.loadFile(path.join(__dirname, "../dist/index.html"));
+    void window
+      .loadFile(path.join(__dirname, "../dist/index.html"))
+      .catch((error) => logStartup("load-file-failed", { message: String(error) }));
   }
 
-  window.once("ready-to-show", () => {
-    window.show();
+  window.webContents.on("did-finish-load", () => logStartup("did-finish-load"));
+  window.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    logStartup("did-fail-load", { errorCode, errorDescription, validatedURL, isMainFrame });
   });
+  window.webContents.on("render-process-gone", (_event, details) => {
+    logStartup("render-process-gone", details as unknown as Record<string, unknown>);
+  });
+  window.on("unresponsive", () => logStartup("window-unresponsive"));
+  window.on("responsive", () => logStartup("window-responsive"));
 
   // 隐藏原生菜单栏（改由渲染进程自绘 HTML 菜单栏，颜色随主题变化），
   // 但保留原生菜单以维持 role 快捷键（剪贴板/缩放/devTools）有效。
@@ -1008,10 +1039,21 @@ if (!hasSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    initializeStartupLog();
+    logStartup("app-ready", {
+      version: app.getVersion(),
+      platform: process.platform,
+      arch: process.arch,
+      hardwareAcceleration: app.isHardwareAccelerationEnabled()
+    });
     pendingOpenPath = getLaunchPath(process.argv);
     registerIpc();
     createMenu();
     createWindow();
+
+    app.on("child-process-gone", (_event, details) => {
+      logStartup("child-process-gone", details as unknown as Record<string, unknown>);
+    });
 
     nativeTheme.on("updated", () => {
       BrowserWindow.getAllWindows().forEach((window) => {

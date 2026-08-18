@@ -226,7 +226,7 @@ button {
   scroll-behavior: smooth;
 }
 
-.rich-markdown-editor {
+.mdxeditor.rich-markdown-editor {
   --basePageBg: var(--bg);
   --baseBase: var(--bg);
   --baseBgSubtle: var(--surface);
@@ -256,6 +256,44 @@ button {
   color: var(--text);
   background: var(--bg);
   font-family: var(--font-doc);
+}
+
+.frontmatter-preview {
+  margin: 0 0 28px;
+  padding: 13px 15px;
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.frontmatter-preview > strong {
+  display: block;
+  margin-bottom: 9px;
+  font-size: 13px;
+}
+
+.frontmatter-preview dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.frontmatter-preview dl > div {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.3fr) 1fr;
+  gap: 12px;
+}
+
+.frontmatter-preview dt {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+}
+
+.frontmatter-preview dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .rich-markdown-content {
@@ -389,6 +427,45 @@ button {
   color: var(--text);
   font-family: var(--font-doc);
   line-height: 1.72;
+}
+
+.advanced-preview-notice {
+  position: sticky;
+  z-index: 5;
+  top: 12px;
+  display: flex;
+  width: min(860px, calc(100vw - 180px));
+  min-height: 38px;
+  margin: 12px auto -38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 9px 7px 13px;
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 5px 20px rgb(0 0 0 / 8%);
+  font-size: 12.5px;
+  backdrop-filter: blur(10px);
+}
+
+.advanced-preview-notice button {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--accent);
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.advanced-preview-notice + .markdown-body {
+  padding-top: 78px;
+}
+
+.workspace.has-sidebar .advanced-preview-notice {
+  width: min(820px, calc(100vw - var(--drawer-width) - 120px));
 }
 
 .workspace.has-sidebar .markdown-body {
@@ -1549,6 +1626,8 @@ button {
   .workspace.has-sidebar .markdown-body,
   .rich-markdown-content,
   .workspace.has-sidebar .rich-markdown-content,
+  .advanced-preview-notice,
+  .workspace.has-sidebar .advanced-preview-notice,
   .source-editor,
   .workspace.has-sidebar .source-editor {
     width: calc(100vw - 42px);

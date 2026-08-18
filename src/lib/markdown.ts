@@ -3,8 +3,9 @@ import { katex as markdownItKatex } from "@mdit/plugin-katex";
 import markdownItAnchor from "markdown-it-anchor";
 import markdownItTaskLists from "markdown-it-task-lists";
 import markdownItFootnote from "markdown-it-footnote";
-import markdownItFrontMatter from "markdown-it-front-matter";
 import markdownItTocDoneRight from "markdown-it-toc-done-right";
+import DOMPurify from "dompurify";
+import { parse as parseYaml } from "yaml";
 import hljs from "highlight.js/lib/core";
 // 按需注册常用语言，避免全量导入 ~1MB（180+ 语言）。主路径 MDXEditor 用 CodeMirror 高亮，
 // hljs 仅服务于导出 HTML / 复制 HTML，常用语言覆盖足够，未注册的语言回退为纯文本。
@@ -50,8 +51,123 @@ type MarkdownRenderEnv = {
   documentMode?: boolean;
 };
 
-function hasFrontMatterBlock(lines: string[]): boolean {
-  return lines[0]?.trim() === "---" && lines.slice(1).some((line) => /^(---|\.\.\.)\s*$/.test(line));
+const SAFE_URI_RE = /^(?:(?:https?|mailto|tel|file):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i;
+
+function sanitizeRenderedHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true, mathMl: true, svg: true },
+    ALLOWED_URI_REGEXP: SAFE_URI_RE
+  });
+}
+
+export type MarkdownFrontMatter = {
+  content: string;
+  data: Record<string, unknown>;
+  endLine: number;
+};
+
+export type RichMarkdownFeature = "frontmatter" | "math" | "mermaid" | "footnote" | "toc" | "raw-html";
+
+export type RichMarkdownCompatibility = {
+  features: RichMarkdownFeature[];
+  requiresDocumentPreview: boolean;
+};
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * Front matter is an extension rather than CommonMark syntax, so `---` is
+ * ambiguous with a thematic break. Only treat a closed block as front matter
+ * when its contents parse to a non-empty YAML mapping. This mirrors document
+ * property editors and prevents ordinary horizontal rules from hiding text.
+ */
+export function parseMarkdownFrontMatter(markdown: string): MarkdownFrontMatter | null {
+  const lines = markdown.split(/\r?\n/);
+  if (lines[0]?.trim() !== "---") return null;
+
+  const endLine = lines.findIndex((line, index) => index > 0 && /^(---|\.\.\.)\s*$/.test(line));
+  if (endLine < 0) return null;
+
+  const content = lines.slice(1, endLine).join("\n");
+  if (!content.trim() || content.length > 64 * 1024) return null;
+  // The embedded rich editor currently depends on js-yaml. Reject merge keys,
+  // aliases and explicit complex tags before that parser sees the block; a
+  // document-properties panel only needs a plain mapping.
+  if (/^\s*<<\s*:/m.test(content) || /(?:^|\s)[&*][\w-]+/.test(content) || /!!(?:omap|pairs|set)\b/.test(content)) {
+    return null;
+  }
+
+  try {
+    const data = parseYaml(content);
+    if (!isPlainRecord(data) || Object.keys(data).length === 0) return null;
+    return { content, data, endLine };
+  } catch {
+    return null;
+  }
+}
+
+function strictFrontMatterPlugin(md: MarkdownIt) {
+  md.block.ruler.before("table", "front_matter", (state, startLine, _endLine, silent) => {
+    if (startLine !== 0) return false;
+    const frontMatter = parseMarkdownFrontMatter(state.src);
+    if (!frontMatter) return false;
+    if (silent) return true;
+
+    const token = state.push("front_matter", "", 0);
+    token.block = true;
+    token.hidden = true;
+    token.map = [0, frontMatter.endLine + 1];
+    token.markup = "---";
+    token.content = frontMatter.content;
+    token.meta = frontMatter.data;
+    state.line = frontMatter.endLine + 1;
+    return true;
+  }, { alt: ["paragraph", "reference", "blockquote", "list"] });
+
+  md.renderer.rules.front_matter = () => "";
+}
+
+/**
+ * MDXEditor does not render these extensions faithfully. Detect them outside
+ * fenced/inline code so the app can use the complete document renderer instead
+ * of silently hiding content or showing an incorrect approximation.
+ */
+export function analyzeRichMarkdownCompatibility(markdown: string): RichMarkdownCompatibility {
+  const features = new Set<RichMarkdownFeature>();
+  const lines = markdown.split(/\r?\n/);
+  const frontMatter = parseMarkdownFrontMatter(markdown);
+  if (frontMatter) features.add("frontmatter");
+  let inFence = false;
+  let fenceMarker = "";
+
+  lines.forEach((line, index) => {
+    if (frontMatter && index <= frontMatter.endLine) return;
+
+    const fence = line.match(/^\s*(`{3,}|~{3,})\s*([^\s]*)/);
+    if (fence) {
+      const marker = fence[1][0];
+      if (!inFence) {
+        inFence = true;
+        fenceMarker = marker;
+        if (fence[2].toLowerCase() === "mermaid") features.add("mermaid");
+      } else if (marker === fenceMarker) {
+        inFence = false;
+        fenceMarker = "";
+      }
+      return;
+    }
+    if (inFence) return;
+
+    const visible = line.replace(/`[^`]*`/g, "");
+    if (/\$\$|(^|[^\\])\$(?!\s)(?:[^$]|\\\$)+\$/.test(visible)) features.add("math");
+    if (/\[\^[^\]]+\]|^\s*\[\^[^\]]+\]:/.test(visible)) features.add("footnote");
+    if (/^\s*(\[TOC\]|\[\[toc\]\])\s*$/i.test(visible)) features.add("toc");
+    if (/<\/?[A-Za-z][^>]*>/.test(visible)) features.add("raw-html");
+  });
+
+  return { features: Array.from(features), requiresDocumentPreview: features.size > 0 };
 }
 
 export function encodeFileUrlPath(value: string) {
@@ -81,12 +197,13 @@ export function headingId(text: string, chunkIndex: number, headingIndex: number
 
 export function splitMarkdownIntoChunks(markdown: string): MarkdownChunk[] {
   const lines = markdown.split(/\r?\n/);
+  const frontMatter = parseMarkdownFrontMatter(markdown);
   const chunks: MarkdownChunk[] = [];
   let buffer: string[] = [];
   let bufferChars = 0;
   let startLine = 0;
   let inFence = false;
-  let inFrontMatter = hasFrontMatterBlock(lines);
+  let inFrontMatter = frontMatter !== null;
   const maxLines = 140;
   const maxChars = 12000;
 
@@ -99,7 +216,7 @@ export function splitMarkdownIntoChunks(markdown: string): MarkdownChunk[] {
 
   lines.forEach((line, lineIndex) => {
     const isFrontMatterLine = inFrontMatter;
-    if (inFrontMatter && lineIndex > 0 && /^(---|\.\.\.)\s*$/.test(line)) {
+    if (inFrontMatter && lineIndex === frontMatter?.endLine) {
       inFrontMatter = false;
     }
     const isFence = !isFrontMatterLine && FENCE_RE.test(line.trim());
@@ -130,10 +247,11 @@ export function buildOutline(chunks: MarkdownChunk[]): OutlineItem[] {
     let inFence = false;
     let localHeadingIndex = 0;
     const lines = chunk.text.split(/\r?\n/);
-    let inFrontMatter = chunk.index === 0 && hasFrontMatterBlock(lines);
+    const frontMatter = chunk.index === 0 ? parseMarkdownFrontMatter(chunk.text) : null;
+    let inFrontMatter = frontMatter !== null;
     lines.forEach((line, offset) => {
       if (inFrontMatter) {
-        if (offset > 0 && /^(---|\.\.\.)\s*$/.test(line)) inFrontMatter = false;
+        if (offset === frontMatter?.endLine) inFrontMatter = false;
         return;
       }
       if (FENCE_RE.test(line.trim())) {
@@ -161,9 +279,9 @@ export function buildOutline(chunks: MarkdownChunk[]): OutlineItem[] {
 
 export function createMarkdownRenderer(baseDirectory: string | null) {
   const md: MarkdownIt = new MarkdownIt({
-    // Markdown files are treated as untrusted input; plugin-rendered math and
-    // diagrams are allowed, but raw HTML is escaped by default.
-    html: false,
+    // Parse raw HTML for Markdown compatibility, then sanitize the complete
+    // rendered document before it reaches the DOM.
+    html: true,
     linkify: true,
     typographer: true,
     highlight(code: string, lang: string): string {
@@ -189,9 +307,7 @@ export function createMarkdownRenderer(baseDirectory: string | null) {
     slugify,
     listType: "ul"
   });
-  // 使用块级解析插件处理 YAML front matter。它只匹配文档开头完整闭合的
-  // `---` 块，不会被 YAML 内的注释或不同换行符干扰。
-  md.use(markdownItFrontMatter, () => {});
+  md.use(strictFrontMatterPlugin);
 
   const defaultFence = md.renderer.rules.fence as RenderRule;
   md.renderer.rules.fence = ((tokens, idx, options, env, self) => {
@@ -240,7 +356,7 @@ export function renderMarkdownChunk(
   baseDirectory: string | null,
   md = createMarkdownRenderer(baseDirectory)
 ): string {
-  return md.render(chunk.text, { chunkIndex: chunk.index, headingIndex: 0 });
+  return sanitizeRenderedHtml(md.render(chunk.text, { chunkIndex: chunk.index, headingIndex: 0 }));
 }
 
 export function renderMarkdownChunks(chunks: MarkdownChunk[], baseDirectory: string | null) {
@@ -251,7 +367,7 @@ export function renderMarkdownChunks(chunks: MarkdownChunk[], baseDirectory: str
 export function renderMarkdownDocument(markdown: string, baseDirectory: string | null): string {
   // TOC、脚注和 front matter 都具有文档级语义，必须在同一次 MarkdownIt
   // 解析中处理；分块只用于交互式只读预览的渐进渲染。
-  return createMarkdownRenderer(baseDirectory).render(markdown, { documentMode: true });
+  return sanitizeRenderedHtml(createMarkdownRenderer(baseDirectory).render(markdown, { documentMode: true }));
 }
 
 /**

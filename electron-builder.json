@@ -11,25 +11,34 @@
     "package.json",
     "!node_modules/**/*"
   ],
-  "compression": "maximum",
+  "compression": "normal",
   "afterPack": "scripts/afterPack.mjs",
   "win": {
-    "target": ["nsis", "portable"],
+    "target": ["nsis", "zip"],
     "icon": "assets/icon.ico",
-    "signExecutable": false
+    "artifactName": "MarkLens-${version}-${arch}.${ext}"
   },
   "nsis": {
-    "oneClick": false,
+    "oneClick": true,
     "perMachine": false,
-    "allowToChangeInstallationDirectory": true,
+    "runAfterFinish": false,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
+    "artifactName": "MarkLens-Setup-${version}-${arch}.${ext}",
     "installerIcon": "assets/icon.ico",
     "uninstallerIcon": "assets/icon.ico",
     "installerHeaderIcon": "assets/icon.ico"
   },
   "portable": {
     "artifactName": "MarkLens-${version}-${arch}-portable.${ext}"
+  },
+  "msi": {
+    "oneClick": false,
+    "perMachine": true,
+    "runAfterFinish": false,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "artifactName": "MarkLens-Enterprise-${version}-${arch}.${ext}"
   },
   "fileAssociations": [
     {

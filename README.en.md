@@ -8,31 +8,27 @@ MarkLens keeps the document first: the sidebar is hidden by default, the outline
 
 ## Download
 
-The current project version is **v0.2.3**. Published Windows builds are available from the [Releases page](https://github.com/syd191/marklens/releases); running `npm run dist` produces:
+The current project version is **v0.2.4**. Published Windows builds are available from the [Releases page](https://github.com/syd191/marklens/releases); running `npm run dist` produces:
 
-- `MarkLens Setup 0.2.3.exe`: installer.
-- `MarkLens-0.2.3-x64-portable.exe`: portable executable.
+- `MarkLens-Setup-0.2.4-x64.exe`: per-user installer.
+- `MarkLens-0.2.4-x64.zip`: regular ZIP distribution recommended for managed intranets.
 
 > Windows builds are currently unsigned, so Microsoft Defender SmartScreen may prompt on first launch.
 
 ## Screenshots
 
-MarkLens 0.2.1 document-first WYSIWYG editing view:
+MarkLens 0.2.4 complete Markdown preview:
 
-![MarkLens 0.2.1 WYSIWYG editing view](docs/screenshots/reading-night.png)
+![MarkLens 0.2.4 complete Markdown preview](docs/screenshots/reading-night.png)
 
-MarkLens 0.2.1 outline navigation:
+MarkLens 0.2.4 outline navigation:
 
-![MarkLens 0.2.1 outline view](docs/screenshots/outline-night.png)
-
-MarkLens 0.2.1 current-folder file browsing:
-
-![MarkLens 0.2.1 files view](docs/screenshots/files-night.png)
+![MarkLens 0.2.4 outline view](docs/screenshots/outline-night.png)
 
 ## What It Does
 
 - Opens `.md`, `.markdown`, and `.txt` files.
-- Uses a WYSIWYG editor by default for headings, lists, tables, code blocks, quotes, links, and images.
+- Starts in source mode; regular CommonMark/GFM documents can use WYSIWYG editing, while advanced syntax uses the complete document preview.
 - Generates a document outline and lets you jump between headings.
 - Provides Outline, Files, and Search sidebar views.
 - Supports Files context actions: show in File Explorer, create MD file, create folder, rename files and folders.
@@ -45,6 +41,7 @@ MarkLens 0.2.1 current-folder file browsing:
 - Supports Github, Newsprint, Night, Pixyll, Whitey, and Follow System themes.
 - A custom HTML menu bar re-colors with the active theme while preserving all shortcuts.
 - Follows the system language by default, with Simplified Chinese, Traditional Chinese, and English UI.
+- Provides per-user NSIS, regular ZIP, portable, and per-machine MSI distributions for IT deployment.
 
 ## Markdown Support
 
@@ -62,18 +59,17 @@ MarkLens 0.2.1 current-folder file browsing:
 
 MarkLens is built to make opening and browsing Markdown feel immediate:
 
-- The window waits until the first UI is ready before showing.
+- The window immediately shows its themed background so renderer failures cannot leave it hidden; startup failures are logged locally.
 - The initial HTML shell applies the saved/system theme before React loads to reduce white flashes.
-- The interactive read-only preview splits long Markdown files into chunks.
-- The first chunks render first; remaining chunks render during idle time.
-- HTML export and copy render the whole document in one pass so TOCs, footnotes, and Front Matter keep document-level semantics.
+- The rich editor is lazy-loaded, so source-mode startup does not load the Lexical/MDXEditor bundle.
+- Math, Mermaid, footnotes, TOCs, Front Matter, and HTML render as one document to preserve document-level semantics.
 - Outline generation is deferred by default and runs when needed.
-- Mermaid diagrams render near the viewport instead of during the first paint.
+- Mermaid is loaded on demand and renders each diagram into an isolated SVG.
 - The file tree scans lazily by directory.
 
 ## Safety Defaults
 
-- Raw HTML inside Markdown is escaped.
+- Raw HTML is sanitized with DOMPurify: safe formatting remains, while scripts and event handlers are removed.
 - Electron context isolation and sandbox mode are enabled.
 - File access is limited to Markdown-like text files.
 - Auto save is opt-in and strictly checks the file modification time before writing.
@@ -104,13 +100,17 @@ Run checks:
 npm run check
 ```
 
-Build Windows installer and portable executable:
+Build the Windows installer and regular ZIP distribution:
 
 ```bash
 npm run dist
 ```
 
-Build artifacts are written to `../../outputs` from this project folder.
+Use `npm run pack` for the portable executable, or `npm run dist:enterprise` for a per-machine MSI intended for IT deployment.
+
+Production enterprise releases should configure code signing through electron-builder's `CSC_LINK` / `CSC_KEY_PASSWORD` variables and set `$env:MARKLENS_REQUIRE_SIGNING="1"` so an unsigned build fails validation.
+
+Build artifacts are written to `dist-build/` together with `build-manifest.json`, which records hashes, signature status, and required runtime-file checks.
 
 ## Project Structure
 
@@ -119,7 +119,7 @@ Build artifacts are written to `../../outputs` from this project folder.
 - `src/components/RichMarkdownEditor.tsx`: WYSIWYG editor and semantic command bridge.
 - `src/components/SourceEditor.tsx`: source editor, history, find, and selection operations.
 - `src/lib/editorCommands.ts`: tested Markdown source transformations.
-- `src/lib/markdown.ts`: chunking, outline extraction, progressive preview, and whole-document rendering.
+- `src/lib/markdown.ts`: strict Front Matter recognition, outline extraction, compatibility analysis, safe HTML, and whole-document rendering.
 - `src/lib/i18n.ts`: Simplified Chinese / Traditional Chinese / English UI strings and language resolution.
 - `assets/`: App icon source files.
 - `docs/`: Architecture and maintenance notes.

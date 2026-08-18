@@ -13,12 +13,10 @@ import {
   codeMirrorPlugin,
   currentBlockType$,
   directivesPlugin,
-  frontmatterPlugin,
   headingsPlugin,
   imagePlugin,
   insertCodeMirror$,
   insertDirective$,
-  insertFrontmatter$,
   insertMarkdown$,
   insertTable$,
   insertThematicBreak$,
@@ -72,7 +70,11 @@ function resolveImageSource(source: string, baseDirectory: string | null) {
   return `file:///${encodeFileUrlPath(normalized)}`;
 }
 
-function RichCommandBridge({ channel }: { channel: MutableRefObject<CommandChannel> }) {
+function RichCommandBridge({
+  channel
+}: {
+  channel: MutableRefObject<CommandChannel>;
+}) {
   const activeEditor = useCellValue(activeEditor$);
   const currentBlockType = useCellValue(currentBlockType$);
   const applyBlockType = usePublisher(applyBlockType$);
@@ -80,7 +82,6 @@ function RichCommandBridge({ channel }: { channel: MutableRefObject<CommandChann
   const applyListType = usePublisher(applyListType$);
   const insertCode = usePublisher(insertCodeMirror$);
   const insertDirective = usePublisher(insertDirective$);
-  const insertFrontmatter = usePublisher(insertFrontmatter$);
   const insertMarkdown = usePublisher(insertMarkdown$);
   const insertTable = usePublisher(insertTable$);
   const insertThematicBreak = usePublisher(insertThematicBreak$);
@@ -156,8 +157,8 @@ function RichCommandBridge({ channel }: { channel: MutableRefObject<CommandChann
         return true;
       }
       if (command === "front-matter") {
-        insertFrontmatter();
-        return true;
+        // Front matter is edited in source mode to preserve YAML value types.
+        return false;
       }
       if (command === "link") {
         openLinkDialog();
@@ -195,7 +196,6 @@ function RichCommandBridge({ channel }: { channel: MutableRefObject<CommandChann
     currentBlockType,
     insertCode,
     insertDirective,
-    insertFrontmatter,
     insertMarkdown,
     insertTable,
     insertThematicBreak,
@@ -262,7 +262,6 @@ export const RichMarkdownEditor = memo(forwardRef<RichMarkdownEditorHandle, Rich
         mermaid: "Mermaid"
       }
     }),
-    frontmatterPlugin(),
     directivesPlugin({ directiveDescriptors: [AdmonitionDirectiveDescriptor] }),
     markdownShortcutPlugin(),
     toolbarPlugin({

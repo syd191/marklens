@@ -1,6 +1,6 @@
 {
   "name": "marklens",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "免费的所见即所得 Markdown 编辑与维护工具。Free WYSIWYG Markdown editor and maintenance tool.",
   "license": "MIT",
   "author": "syd191",
@@ -12,8 +12,9 @@
     "dev:electron": "electron .",
     "build": "tsc -p tsconfig.node.json && tsc -p tsconfig.json && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "pack": "npm run build && electron-builder --win portable --config electron-builder.json && node scripts/apply-icon.mjs",
-    "dist": "npm run build && electron-builder --win nsis portable --config electron-builder.json && node scripts/apply-icon.mjs",
+    "pack": "npm run build && node scripts/buildWindows.mjs portable && node scripts/verifyWindowsBuild.mjs portable",
+    "dist": "npm run build && node scripts/buildWindows.mjs nsis zip && node scripts/verifyWindowsBuild.mjs nsis zip",
+    "dist:enterprise": "npm run build && node scripts/buildWindows.mjs msi zip && node scripts/verifyWindowsBuild.mjs msi zip",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -22,6 +23,7 @@
   "dependencies": {
     "@mdit/plugin-katex": "^1.0.1",
     "@mdxeditor/editor": "^4.1.1",
+    "dompurify": "^3.4.13",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.22",
     "lexical": "^0.48.0",
@@ -29,13 +31,13 @@
     "markdown-it": "^14.2.0",
     "markdown-it-anchor": "^9.2.0",
     "markdown-it-footnote": "^3.0.3",
-    "markdown-it-front-matter": "^0.2.4",
     "markdown-it-task-lists": "^2.1.1",
     "markdown-it-toc-done-right": "^4.2.0",
-    "mermaid": "^11.4.1",
+    "mermaid": "^11.16.1",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",

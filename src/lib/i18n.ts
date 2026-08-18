@@ -25,6 +25,11 @@ const zhCN = {
       conflict: "文件冲突"
     } satisfies Record<SaveStatus, string>
   },
+  preview: {
+    advancedNotice: "此文档包含属性、公式、图表、脚注、目录或 HTML，当前显示完整预览。",
+    editSource: "使用源码模式编辑",
+    documentProperties: "文档属性"
+  },
   theme: {
     system: "跟随系统",
     github: "Github",
@@ -147,6 +152,11 @@ const enUS = {
       conflict: "Conflict"
     } satisfies Record<SaveStatus, string>
   },
+  preview: {
+    advancedNotice: "This document uses properties, math, diagrams, footnotes, a TOC, or HTML. Showing the complete preview.",
+    editSource: "Edit in source mode",
+    documentProperties: "Document properties"
+  },
   theme: {
     system: "Follow System",
     github: "Github",
@@ -268,6 +278,11 @@ const zhTW = {
       failed: "儲存失敗",
       conflict: "檔案衝突"
     } satisfies Record<SaveStatus, string>
+  },
+  preview: {
+    advancedNotice: "此文件包含屬性、公式、圖表、註腳、目錄或 HTML，目前顯示完整預覽。",
+    editSource: "使用原始碼模式編輯",
+    documentProperties: "文件屬性"
   },
   theme: {
     system: "跟隨系統",
