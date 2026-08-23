@@ -10,6 +10,20 @@ export type EpubReadingState = {
   tocOpen: boolean;
 };
 
+export const EPUB_WHEEL_TURN_THRESHOLD = 40;
+
+export function normalizeEpubWheelDelta(deltaX: number, deltaY: number, deltaMode: number) {
+  const dominantDelta = Math.abs(deltaY) >= Math.abs(deltaX) ? deltaY : deltaX;
+  const scale = deltaMode === 1 ? 16 : deltaMode === 2 ? 800 : 1;
+  return dominantDelta * scale;
+}
+
+export function getEpubWheelTurn(accumulatedDelta: number): -1 | 0 | 1 {
+  if (accumulatedDelta >= EPUB_WHEEL_TURN_THRESHOLD) return 1;
+  if (accumulatedDelta <= -EPUB_WHEEL_TURN_THRESHOLD) return -1;
+  return 0;
+}
+
 const DEFAULT_READING_STATE: EpubReadingState = {
   flow: "paginated",
   fontSize: 18,

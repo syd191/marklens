@@ -4,7 +4,9 @@ import {
   clampFontSize,
   flattenToc,
   getEpubErrorMessage,
+  getEpubWheelTurn,
   loadEpubReadingState,
+  normalizeEpubWheelDelta,
   normalizeLocalizedValue,
   saveEpubReadingState
 } from "./epub";
@@ -57,5 +59,14 @@ describe("EPUB helpers", () => {
     expect(css).toContain("background: #1f1f1f");
     expect(css).not.toContain("width: 100vw");
     expect(css).not.toContain("height: 100vh");
+  });
+
+  it("normalizes mouse-wheel and trackpad input before turning a page", () => {
+    expect(normalizeEpubWheelDelta(5, 40, 0)).toBe(40);
+    expect(normalizeEpubWheelDelta(-6, 2, 1)).toBe(-96);
+    expect(normalizeEpubWheelDelta(0, 1, 2)).toBe(800);
+    expect(getEpubWheelTurn(39)).toBe(0);
+    expect(getEpubWheelTurn(40)).toBe(1);
+    expect(getEpubWheelTurn(-40)).toBe(-1);
   });
 });

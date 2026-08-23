@@ -34,6 +34,8 @@ For EPUB changes, use the official [W3C/IDPF EPUB 3 samples](https://github.com/
 - A fixed-layout book remains visually intact and fits the reader without MarkLens typography overrides.
 - An Arabic RTL book advances in publication order and exposes correct Previous/Next labels.
 - A Japanese vertical-writing book keeps vertical glyph flow and publication progression.
+- In paginated and fixed-layout modes, wheel/trackpad down advances one logical page and wheel/trackpad up returns without inertial multi-page skips.
+- In scrolling mode, the wheel keeps native continuous scrolling instead of triggering discrete page navigation.
 - A renamed non-ZIP `.epub` displays an actionable error rather than a blank surface.
 
 ## Code Style

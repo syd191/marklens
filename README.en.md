@@ -8,10 +8,10 @@ MarkLens keeps the document first: the sidebar is hidden by default, the outline
 
 ## Download
 
-The current project version is **v0.3.0**. Published Windows builds are available from the [Releases page](https://github.com/syd191/marklens/releases); running `npm run dist` produces:
+The current project version is **v0.3.1**. Published Windows builds are available from the [Releases page](https://github.com/syd191/marklens/releases); running `npm run dist` produces:
 
-- `MarkLens-Setup-0.3.0-x64.exe`: per-user installer.
-- `MarkLens-0.3.0-x64.zip`: regular ZIP distribution recommended for managed intranets.
+- `MarkLens-Setup-0.3.1-x64.exe`: per-user installer.
+- `MarkLens-0.3.1-x64.zip`: regular ZIP distribution recommended for managed intranets.
 
 > Windows builds are currently unsigned, so Microsoft Defender SmartScreen may prompt on first launch.
 
@@ -29,7 +29,7 @@ EPUB reading in the Night theme:
 
 - Opens `.md`, `.markdown`, `.txt`, and `.epub` files; Windows builds can register the EPUB association.
 - Reads unencrypted EPUB 2/3 publications, including reflowable, fixed-layout, right-to-left, and vertical-writing books.
-- Provides EPUB contents navigation, paginated/scrolling flow, font sizing, chapter and progress navigation, and reading-position persistence.
+- Provides EPUB contents navigation, paginated/scrolling flow, font sizing, chapter and progress navigation, reading-position persistence, and mouse-wheel or trackpad page turns in paginated and fixed-layout books.
 - Starts in source mode; regular CommonMark/GFM documents can use WYSIWYG editing, while advanced syntax uses the complete document preview.
 - Generates a document outline and lets you jump between headings.
 - Provides Outline, Files, and Search sidebar views.
@@ -61,6 +61,7 @@ EPUB reading in the Night theme:
 
 - Parsing is provided by a pinned [foliate-js](https://github.com/johnfactotum/foliate-js) commit behind a MarkLens adapter, containing the impact of upstream API changes.
 - Publication reading order, language direction, vertical writing, and fixed layout are preserved; themes and font size are applied only to reflowable content.
+- In paginated and fixed-layout views, scrolling down/right advances and scrolling up/left goes back; scrolling flow retains native continuous scrolling.
 - Publication scripts are disabled by the content security policy, and external links can only be opened through the system browser.
 - DRM, encrypted resources, and script-dependent interactive books are not supported. A single EPUB is limited to 512 MB for safe in-memory loading.
 - Corrupt containers, invalid `container.xml` / OPF metadata, and renamed non-EPUB files produce an actionable error instead of a blank reader.

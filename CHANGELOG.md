@@ -2,6 +2,21 @@
 
 All notable changes to MarkLens are documented here.
 
+## 0.3.1 - 2026-08-24
+
+### Added
+
+- Add mouse-wheel and trackpad page turns to paginated and fixed-layout EPUB reading.
+
+### Changed
+
+- Accumulate small wheel deltas and apply a navigation cooldown so high-resolution trackpads and inertial scrolling do not skip several pages.
+- Keep continuous EPUB scrolling native while wheel pagination follows the publication's logical reading order, including RTL books.
+
+### Tested
+
+- Cover pixel, line, and page wheel-delta modes with automated tests, plus forward/backward pagination and continuous scrolling in the desktop reader.
+
 ## 0.3.0 - 2026-08-24
 
 ### Added

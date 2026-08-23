@@ -32,7 +32,7 @@ MarkLens is an Electron + React desktop app for editing and maintaining Markdown
 2. `EpubReader` and the pinned foliate-js engine are lazy-loaded only after an EPUB is opened.
 3. foliate-js resolves the container, OPF package, spine, navigation and resources on demand; the MarkLens adapter normalizes localized metadata and flattens nested navigation.
 4. Reflowable publications receive theme and font-size CSS in their isolated content documents. Fixed-layout publications keep their original geometry and use fit-page rendering.
-5. Navigation follows publication progression, including RTL and vertical writing. CFI, flow, font size, and TOC state are persisted per file revision.
+5. Navigation follows publication progression, including RTL and vertical writing. Paginated and fixed-layout wheel input is accumulated into logical next/previous turns with an inertia cooldown, while scrolling flow remains native. CFI, flow, font size, and TOC state are persisted per file revision.
 6. Unsupported or malformed books render a localized error page. EPUB content is never written back to disk.
 
 ## Performance Boundaries

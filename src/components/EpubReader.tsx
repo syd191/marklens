@@ -22,8 +22,10 @@ import {
   formatEpubPercent,
   getEpubErrorMessage,
   getEpubReadingKey,
+  getEpubWheelTurn,
   languagePreferences,
   loadEpubReadingState,
+  normalizeEpubWheelDelta,
   normalizeLocalizedValue,
   saveEpubReadingState,
   type EpubFlow,
@@ -121,7 +123,9 @@ function EpubReaderComponent({ epub, language, theme, onOpenAnother }: EpubReade
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const hostRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLElement>(null);
   const viewRef = useRef<View | null>(null);
+  const attachDocumentWheelRef = useRef<(doc: ReaderDocument) => void>(() => undefined);
   const themeRef = useRef(theme);
   const fontSizeRef = useRef(fontSize);
   themeRef.current = theme;
@@ -179,6 +183,9 @@ function EpubReaderComponent({ epub, language, theme, onOpenAnother }: EpubReade
 
         view.addEventListener("load", ((event: CustomEvent<{ doc: ReaderDocument }>) => {
           injectDocumentTheme(event.detail.doc);
+          // Publication wheel events stay inside foliate's isolated iframe, so
+          // each newly loaded content document needs the active page handler.
+          attachDocumentWheelRef.current(event.detail.doc);
         }) as EventListener);
         view.addEventListener("relocate", ((event: CustomEvent<FoliateRelocateDetail>) => {
           const detail = event.detail;
@@ -241,6 +248,68 @@ function EpubReaderComponent({ epub, language, theme, onOpenAnother }: EpubReade
     if (!view || fixedLayout) return;
     view.renderer?.setAttribute("flow", flow);
   }, [fixedLayout, flow]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || loading || (!fixedLayout && flow !== "paginated")) return;
+
+    let accumulatedDelta = 0;
+    let resetTimer: number | undefined;
+    let cooldownTimer: number | undefined;
+    let turning = false;
+    let disposed = false;
+    const wheelTargets = new Set<HTMLElement | ReaderDocument>();
+
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const view = viewRef.current;
+      if (!view) return;
+
+      const delta = normalizeEpubWheelDelta(event.deltaX, event.deltaY, event.deltaMode);
+      if (!delta) return;
+      event.preventDefault();
+      if (turning) return;
+
+      accumulatedDelta += delta;
+      window.clearTimeout(resetTimer);
+      resetTimer = window.setTimeout(() => {
+        accumulatedDelta = 0;
+      }, 180);
+
+      const turn = getEpubWheelTurn(accumulatedDelta);
+      if (!turn) return;
+
+      accumulatedDelta = 0;
+      turning = true;
+      const navigation = turn > 0 ? view.next() : view.prev();
+      const finishTurning = () => {
+        if (disposed) return;
+        cooldownTimer = window.setTimeout(() => {
+          turning = false;
+        }, 420);
+      };
+      void navigation.then(finishTurning, finishTurning);
+    };
+
+    const attachWheelTarget = (target: HTMLElement | ReaderDocument) => {
+      if (wheelTargets.has(target)) return;
+      target.addEventListener("wheel", onWheel as EventListener, { passive: false, capture: true });
+      wheelTargets.add(target);
+    };
+
+    attachDocumentWheelRef.current = attachWheelTarget;
+    attachWheelTarget(stage);
+    const renderer = viewRef.current?.renderer as FoliateRenderer | undefined;
+    for (const content of renderer?.getContents?.() ?? []) attachWheelTarget(content.doc);
+
+    return () => {
+      disposed = true;
+      attachDocumentWheelRef.current = () => undefined;
+      for (const target of wheelTargets) target.removeEventListener("wheel", onWheel as EventListener, true);
+      window.clearTimeout(resetTimer);
+      window.clearTimeout(cooldownTimer);
+    };
+  }, [fixedLayout, flow, loading]);
 
   useEffect(() => {
     refreshLoadedDocuments();
@@ -357,7 +426,7 @@ function EpubReaderComponent({ epub, language, theme, onOpenAnother }: EpubReade
           </div>
         </aside>
 
-        <main className="epub-stage">
+        <main ref={stageRef} className="epub-stage">
           <div ref={hostRef} className="epub-view-host" />
           <button type="button" className="epub-page-button is-previous" title={rightToLeft ? t.next : t.previous} aria-label={rightToLeft ? t.next : t.previous} onClick={() => void viewRef.current?.goLeft()}><ChevronLeft size={22} /></button>
           <button type="button" className="epub-page-button is-next" title={rightToLeft ? t.previous : t.next} aria-label={rightToLeft ? t.previous : t.next} onClick={() => void viewRef.current?.goRight()}><ChevronRight size={22} /></button>

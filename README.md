@@ -8,10 +8,10 @@ MarkLens 的核心体验是“正文优先”：默认隐藏侧栏，打开文�
 
 ## 下载
 
-当前项目版本是 **v0.3.0**。已发布的 Windows 构建可从 [Releases 页面](https://github.com/syd191/marklens/releases) 下载；执行 `npm run dist` 时会生成：
+当前项目版本是 **v0.3.1**。已发布的 Windows 构建可从 [Releases 页面](https://github.com/syd191/marklens/releases) 下载；执行 `npm run dist` 时会生成：
 
-- `MarkLens-Setup-0.3.0-x64.exe`：当前用户安装包。
-- `MarkLens-0.3.0-x64.zip`：普通 ZIP 版，推荐公司内网分发。
+- `MarkLens-Setup-0.3.1-x64.exe`：当前用户安装包。
+- `MarkLens-0.3.1-x64.zip`：普通 ZIP 版，推荐公司内网分发。
 
 > Windows 构建目前未进行代码签名，首次运行时可能出现 Microsoft Defender SmartScreen 提示。
 
@@ -29,7 +29,7 @@ EPUB 夜间阅读界面：
 
 - 打开 `.md`、`.markdown`、`.txt` 和 `.epub` 文件；Windows 构建可关联 EPUB。
 - 阅读未加密的 EPUB 2/3：支持重排版、固定版式、从右到左阅读和竖排书写。
-- EPUB 阅读器提供目录、分页/滚动切换、字号调节、章节定位、进度拖动和阅读位置记忆。
+- EPUB 阅读器提供目录、分页/滚动切换、字号调节、章节定位、进度拖动和阅读位置记忆；分页与固定版式可用鼠标滚轮或触控板翻页。
 - 默认使用源码编辑器；普通 CommonMark/GFM 文档可切换到所见即所得编辑，高级语法使用完整文档预览。
 - 自动生成文档大纲，并支持点击标题跳转。
 - 侧栏提供大纲、文档列表/文件树和全文搜索。
@@ -61,6 +61,7 @@ EPUB 夜间阅读界面：
 
 - EPUB 解析由固定提交版本的 [foliate-js](https://github.com/johnfactotum/foliate-js) 提供，并通过 MarkLens 自己的适配层接入，减少上游接口变化对应用的影响。
 - 保留出版物定义的阅读顺序、语言方向、竖排和固定版式；仅对可重排正文应用主题与字号。
+- 分页和固定版式下，向下/向右滚动前进，向上/向左滚动后退；连续滚动模式保留原生滚动行为。
 - EPUB 内脚本默认被内容安全策略禁用，外部链接只允许通过系统浏览器打开。
 - 不支持 DRM、受加密保护的内容或依赖脚本交互的电子书；单个 EPUB 的安全读取上限为 512 MB。
 - 损坏、缺少 `container.xml` / OPF 或伪装扩展名的文件会显示可操作的错误说明，不会停留在空白页。
