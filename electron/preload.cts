@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("markdownBridge", {
   openFileDialog: () => ipcRenderer.invoke("dialog:open-file"),
   openFolderDialog: () => ipcRenderer.invoke("dialog:open-folder"),
   readFile: (filePath: string) => ipcRenderer.invoke("file:read", filePath),
+  openDocument: (filePath: string) => ipcRenderer.invoke("file:open", filePath),
   saveFile: (payload: { filePath: string; content: string; expectedMtimeMs?: number; force?: boolean }) =>
     ipcRenderer.invoke("file:save", payload),
   saveFileAs: (payload: { filePath?: string | null; content: string }) => ipcRenderer.invoke("file:save-as", payload),
@@ -35,6 +36,7 @@ contextBridge.exposeInMainWorld("markdownBridge", {
   applyTheme: (themeMode: string) => ipcRenderer.invoke("theme:apply", themeMode),
   getSystemLanguage: () => ipcRenderer.invoke("locale:get-system"),
   openProjectRepository: () => ipcRenderer.invoke("app:open-project-repository"),
+  openExternalUrl: (url: string) => ipcRenderer.invoke("app:open-external-url", url),
   createNewWindow: () => ipcRenderer.invoke("window:new"),
   print: () => ipcRenderer.invoke("window:print"),
   setFullscreen: (enabled: boolean) => ipcRenderer.invoke("window:set-fullscreen", enabled),

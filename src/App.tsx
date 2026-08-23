@@ -9,6 +9,9 @@ import type { RichMarkdownEditorHandle } from "./components/RichMarkdownEditor";
 const RichMarkdownEditor = lazy(() =>
   import("./components/RichMarkdownEditor").then((m) => ({ default: m.RichMarkdownEditor }))
 );
+const EpubReader = lazy(() =>
+  import("./components/EpubReader").then((m) => ({ default: m.EpubReader }))
+);
 import { SidebarDrawer } from "./components/SidebarDrawer";
 import { SourceEditor, type CursorPosition, type SourceEditorHandle } from "./components/SourceEditor";
 import { StatusBar } from "./components/StatusBar";
@@ -65,8 +68,37 @@ function getMatchCount(content: string, term: string) {
   return count;
 }
 
+async function openBrowserDocument(file: File): Promise<OpenedDocument> {
+  const common = {
+    filePath: file.name,
+    name: file.name,
+    directory: "",
+    mtimeMs: file.lastModified,
+    size: file.size
+  };
+  if (/\.epub$/i.test(file.name)) {
+    return { ...common, kind: "epub", data: await file.arrayBuffer() };
+  }
+  return { ...common, kind: "markdown", content: await file.text() };
+}
+
+function pickBrowserDocument(): Promise<OpenedDocument | null> {
+  return new Promise((resolve) => {
+    const input = window.document.createElement("input");
+    input.type = "file";
+    input.accept = ".md,.markdown,.txt,.epub,application/epub+zip,text/markdown,text/plain";
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) resolve(null);
+      else void openBrowserDocument(file).then(resolve, () => resolve(null));
+    }, { once: true });
+    input.click();
+  });
+}
+
 export default function App() {
   const [document, setDocument] = useState<CurrentDocument>(() => createInitialDocument());
+  const [epubDocument, setEpubDocument] = useState<OpenedEpub | null>(null);
   const [preferences, setPreferences] = useState<Preferences>(() => loadPreferences());
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(initialSystemTheme);
   const [systemLanguage, setSystemLanguage] = useState<AppLanguage>(initialLanguage);
@@ -101,6 +133,8 @@ export default function App() {
   // 把这些易变值放入依赖数组导致监听器频繁重订阅（#15）以及闭包陈旧问题（#3）
   const documentRef = useRef(document);
   documentRef.current = document;
+  const epubDocumentRef = useRef(epubDocument);
+  epubDocumentRef.current = epubDocument;
   const saveStatusRef = useRef(saveStatus);
   saveStatusRef.current = saveStatus;
   const preferencesRef = useRef(preferences);
@@ -139,6 +173,7 @@ export default function App() {
   }, []);
 
   const openFilePayload = useCallback((payload: OpenedFile) => {
+    setEpubDocument(null);
     startTransition(() => {
       setDocument({
         filePath: payload.filePath,
@@ -157,24 +192,53 @@ export default function App() {
     window.markdownBridge?.watchFile(payload.filePath);
   }, []);
 
+  const openEpubPayload = useCallback((payload: OpenedEpub) => {
+    startTransition(() => {
+      setEpubDocument(payload);
+      setDocument({
+        filePath: payload.filePath,
+        name: payload.name,
+        directory: payload.directory,
+        content: "",
+        mtimeMs: payload.mtimeMs,
+        size: payload.size
+      });
+      setSourceMode(false);
+      setSaveStatus("clean");
+      setSearchTerm("");
+      setFindReplaceOpen(false);
+      setWordCountOpen(false);
+      setSidebarOpen(false);
+    });
+    lastAutoSavedContentRef.current = null;
+    window.markdownBridge?.watchFile(null);
+  }, []);
+
+  const openDocumentPayload = useCallback((payload: OpenedDocument) => {
+    if (payload.kind === "epub") openEpubPayload(payload);
+    else openFilePayload(payload);
+  }, [openEpubPayload, openFilePayload]);
+
   const openPath = useCallback(
     async (filePath: string) => {
       if (!(await confirmTransitionRef.current())) return;
       try {
-        const payload = await window.markdownBridge?.readFile(filePath);
-        if (payload) openFilePayload(payload);
+        const payload = await window.markdownBridge?.openDocument(filePath);
+        if (payload) openDocumentPayload(payload);
       } catch (error) {
         console.warn("Unable to open file", error);
       }
     },
-    [openFilePayload]
+    [openDocumentPayload]
   );
 
   const openFileDialog = useCallback(async () => {
     if (!(await confirmTransitionRef.current())) return;
-    const payload = await window.markdownBridge?.openFileDialog();
-    if (payload) openFilePayload(payload);
-  }, [openFilePayload]);
+    const payload = window.markdownBridge
+      ? await window.markdownBridge.openFileDialog()
+      : await pickBrowserDocument();
+    if (payload) openDocumentPayload(payload);
+  }, [openDocumentPayload]);
 
   const openFolderDialog = useCallback(async () => {
     const root = await window.markdownBridge?.openFolderDialog();
@@ -219,22 +283,23 @@ export default function App() {
         const targetLower = targetPath.toLowerCase();
         const currentLower = document.filePath.toLowerCase();
         if (result.type === "file" && currentLower === targetLower) {
-          const payload = await window.markdownBridge?.readFile(result.path);
-          if (payload) openFilePayload(payload);
+          const payload = await window.markdownBridge?.openDocument(result.path);
+          if (payload) openDocumentPayload(payload);
         }
         if (result.type === "directory" && currentLower.startsWith(`${targetLower}\\`)) {
           const nextPath = `${result.path}${document.filePath.slice(targetPath.length)}`;
-          const payload = await window.markdownBridge?.readFile(nextPath);
-          if (payload) openFilePayload(payload);
+          const payload = await window.markdownBridge?.openDocument(nextPath);
+          if (payload) openDocumentPayload(payload);
         }
       }
       return result ?? { ok: false, reason: "unavailable" };
     },
-    [document.filePath, openFilePayload]
+    [document.filePath, openDocumentPayload]
   );
 
   const saveCurrentFile = useCallback(
     async (force = false) => {
+      if (epubDocument) return false;
       if (!document.filePath) return false;
       const snapshot = {
         filePath: document.filePath,
@@ -295,10 +360,11 @@ export default function App() {
       }
       return false;
     },
-    [document.content, document.filePath, document.mtimeMs, document.name, openFilePayload]
+    [document.content, document.filePath, document.mtimeMs, document.name, epubDocument, openFilePayload]
   );
 
   const saveAs = useCallback(async () => {
+    if (epubDocument) return false;
     const payload = await window.markdownBridge?.saveFileAs({
       filePath: document.filePath,
       content: document.content
@@ -308,7 +374,7 @@ export default function App() {
       return true;
     }
     return false;
-  }, [document.content, document.filePath, openFilePayload]);
+  }, [document.content, document.filePath, epubDocument, openFilePayload]);
 
   const confirmDocumentTransition = useCallback(async () => {
     if (!["unsaved", "conflict", "failed"].includes(saveStatus)) return true;
@@ -330,10 +396,11 @@ export default function App() {
   }, [confirmDocumentTransition]);
 
   const moveCurrentFile = useCallback(async () => {
+    if (epubDocument) return;
     if (!document.filePath) return;
     const payload = await window.markdownBridge?.moveFile(document.filePath);
     if (payload) openFilePayload(payload);
-  }, [document.filePath, openFilePayload]);
+  }, [document.filePath, epubDocument, openFilePayload]);
 
   const deleteCurrentFile = useCallback(async () => {
     if (!document.filePath) return;
@@ -341,6 +408,7 @@ export default function App() {
     if (result?.ok) {
       // 先停止文件监听，再清空状态，避免旧监听器在状态提交前触发（#1）
       window.markdownBridge?.watchFile(null);
+      setEpubDocument(null);
       setDocument(createInitialDocument());
       setSaveStatus("clean");
       setFileRoot(null);
@@ -358,18 +426,21 @@ export default function App() {
   }, [document.filePath]);
 
   const exportHtml = useCallback(async () => {
+    if (epubDocument) return;
     const rawHtml = renderMarkdownDocument(document.content, document.directory);
     // 预渲染 mermaid 图表为 SVG，使导出的 HTML 自包含、可离线查看
     const html = await renderMermaidDiagrams(rawHtml, resolvedTheme === "night");
     await window.markdownBridge?.exportHtml({ title: document.name.replace(/\.[^.]+$/, ""), html, theme: resolvedTheme });
-  }, [document.content, document.directory, document.name, resolvedTheme]);
+  }, [document.content, document.directory, document.name, epubDocument, resolvedTheme]);
 
   const exportPdf = useCallback(async () => {
+    if (epubDocument) return;
     await window.markdownBridge?.exportPdf(document.name.replace(/\.[^.]+$/, "") || "document");
-  }, [document.name]);
+  }, [document.name, epubDocument]);
 
   const createNewDocument = useCallback(async () => {
     if (!(await confirmDocumentTransition())) return;
+    setEpubDocument(null);
     setDocument(createInitialDocument());
     setSourceMode(true);
     setSaveStatus("unsaved");
@@ -529,41 +600,42 @@ export default function App() {
   const dispatchCommand = useCallback((command: string) => {
     const actions = ipcActionsRef.current;
     const currentDoc = documentRef.current;
+    const readerMode = Boolean(epubDocumentRef.current);
     const currentPrefs = preferencesRef.current;
     if (command === "new") void actions.createNewDocument();
     if (command === "new-window") window.markdownBridge?.createNewWindow();
     if (command === "open-file") actions.openFileDialog();
     if (command === "quick-open" || command === "import") actions.openFileDialog();
     if (command === "open-folder") actions.openFolderDialog();
-    if (command === "save") {
+    if (command === "save" && !readerMode) {
       if (currentDoc.filePath) void actions.saveCurrentFile();
       else void actions.saveAs();
     }
-    if (command === "save-as") actions.saveAs();
-    if (command === "move-to") actions.moveCurrentFile();
-    if (command === "save-all") actions.saveCurrentFile();
+    if (command === "save-as" && !readerMode) actions.saveAs();
+    if (command === "move-to" && !readerMode) actions.moveCurrentFile();
+    if (command === "save-all" && !readerMode) actions.saveCurrentFile();
     if (command === "properties") actions.showProperties();
     if (command === "show-in-folder" && currentDoc.filePath) actions.showInFolder(currentDoc.filePath);
     if (command === "delete-file") actions.deleteCurrentFile();
-    if (command === "export-html") actions.exportHtml();
-    if (command === "export-pdf") actions.exportPdf();
+    if (command === "export-html" && !readerMode) actions.exportHtml();
+    if (command === "export-pdf" && !readerMode) actions.exportPdf();
     if (command === "print") window.markdownBridge?.print();
     if (command === "preferences") setPreferencesOpen(true);
     if (command === "about") setAboutOpen(true);
     if (command === "close-window" || command === "request-close") void actions.requestClose();
-    if (command === "find-replace") {
+    if (command === "find-replace" && !readerMode) {
       setSourceMode(true);
       setFindReplaceOpen(true);
     }
-    if (command === "show-search") {
+    if (command === "show-search" && !readerMode) {
       setSidebarOpen(true);
       setSidebarTab("search");
     }
-    if (command === "toggle-sidebar") {
+    if (command === "toggle-sidebar" && !readerMode) {
       setSidebarOpen((value) => !value);
       setSidebarTab("outline");
     }
-    if (command === "show-outline") {
+    if (command === "show-outline" && !readerMode) {
       setSidebarOpen(true);
       setSidebarTab("outline");
     }
@@ -571,13 +643,13 @@ export default function App() {
       setSidebarOpen(true);
       setSidebarTab("files");
     }
-    if (command === "toggle-source") setSourceMode((value) => !value);
+    if (command === "toggle-source" && !readerMode) setSourceMode((value) => !value);
     if (command === "toggle-focus") setFocusMode((value) => !value);
-    if (command === "toggle-typewriter") {
+    if (command === "toggle-typewriter" && !readerMode) {
       setTypewriterMode((value) => !value);
     }
     if (command === "toggle-status-bar") setStatusBarVisible((value) => !value);
-    if (command === "word-count") setWordCountOpen(true);
+    if (command === "word-count" && !readerMode) setWordCountOpen(true);
     if (command === "toggle-fullscreen") {
       setFullscreen((value) => {
         window.markdownBridge?.setFullscreen(!value);
@@ -615,7 +687,7 @@ export default function App() {
       "footnote", "horizontal-rule", "toc", "front-matter", "bold", "italic", "underline",
       "inline-code", "strikethrough", "comment", "link", "image", "clear-format"
     ]);
-    if (editorCommands.has(command)) actions.runEditorCommand(command);
+    if (!readerMode && editorCommands.has(command)) actions.runEditorCommand(command);
   }, []);
   const dispatchCommandRef = useRef(dispatchCommand);
   dispatchCommandRef.current = dispatchCommand;
@@ -706,6 +778,7 @@ export default function App() {
         return;
       }
       if (event.key === "F9") {
+        if (epubDocumentRef.current) return;
         event.preventDefault();
         setTypewriterMode((value) => !value);
         return;
@@ -735,6 +808,7 @@ export default function App() {
         return;
       }
       if (key === "s") {
+        if (epubDocumentRef.current) return;
         event.preventDefault();
         if (event.shiftKey) saveAsRef.current();
         else if (filePathRef.current) saveCurrentFileRef.current();
@@ -742,6 +816,7 @@ export default function App() {
         return;
       }
       if (key === "f") {
+        if (epubDocumentRef.current) return;
         event.preventDefault();
         setSourceMode(true);
         setFindReplaceOpen(true);
@@ -753,6 +828,7 @@ export default function App() {
         return;
       }
       if (key === "/") {
+        if (epubDocumentRef.current) return;
         event.preventDefault();
         setSourceMode((value) => !value);
       }
@@ -770,9 +846,13 @@ export default function App() {
       const target = event.target instanceof Element ? event.target : null;
       if (file.type.startsWith("image/") && target?.closest(".rich-editor-shell")) return;
       event.preventDefault();
-      if (!/\.(md|markdown|txt)$/i.test(file.name)) return;
+      if (!/\.(md|markdown|txt|epub)$/i.test(file.name)) return;
       const filePath = window.markdownBridge?.getPathForFile(file);
       if (filePath) openPath(filePath);
+      else {
+        const payload = await openBrowserDocument(file);
+        openDocumentPayload(payload);
+      }
     };
     window.addEventListener("dragover", onDragOver);
     window.addEventListener("drop", onDrop);
@@ -780,7 +860,7 @@ export default function App() {
       window.removeEventListener("dragover", onDragOver);
       window.removeEventListener("drop", onDrop);
     };
-  }, [openPath]);
+  }, [openDocumentPayload, openPath]);
 
   const onContentChange = useCallback((value: string) => {
     setDocument((current) => {
@@ -821,7 +901,7 @@ export default function App() {
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
   return (
-    <div className={`app-shell${focusMode ? " is-focus-mode" : ""}${statusBarVisible ? "" : " is-status-hidden"}`}>
+    <div className={`app-shell${focusMode ? " is-focus-mode" : ""}${statusBarVisible && !epubDocument ? "" : " is-status-hidden"}`}>
       <MenuBar
         language={language}
         themeMode={preferences.themeMode}
@@ -829,6 +909,7 @@ export default function App() {
         focusMode={focusMode}
         typewriterMode={typewriterMode}
         statusBar={statusBarVisible}
+        readerMode={Boolean(epubDocument)}
         onCommand={dispatchCommand}
         onOpenPath={openPath}
         onZoomIn={zoomIn}
@@ -840,7 +921,7 @@ export default function App() {
         t={t}
         open={sidebarOpen}
         tab={sidebarTab}
-        outline={outline}
+        outline={epubDocument ? [] : outline}
         fileRoot={fileRoot}
         currentPath={document.filePath}
         searchTerm={searchTerm}
@@ -861,7 +942,17 @@ export default function App() {
       />
 
       <div className={`workspace${sidebarOpen ? " has-sidebar" : ""}`} ref={editorContainerRef}>
-        {sourceMode ? (
+        {epubDocument ? (
+          <Suspense fallback={<div className="epub-reader epub-reader-placeholder" />}>
+            <EpubReader
+              key={`${epubDocument.filePath}:${epubDocument.mtimeMs}`}
+              epub={epubDocument}
+              language={language}
+              theme={resolvedTheme}
+              onOpenAnother={openFileDialog}
+            />
+          </Suspense>
+        ) : sourceMode ? (
           <SourceEditor
             key={document.filePath ?? "untitled"}
             ref={editorRef}
@@ -899,7 +990,7 @@ export default function App() {
             />
           </Suspense>
         )}
-        <FindReplaceBar
+        {!epubDocument && <FindReplaceBar
           t={t}
           open={findReplaceOpen}
           term={searchTerm}
@@ -911,7 +1002,7 @@ export default function App() {
           onReplace={() => editorRef.current?.replaceCurrent(searchTerm, replaceTerm)}
           onReplaceAll={replaceAll}
           onClose={() => setFindReplaceOpen(false)}
-        />
+        />}
       </div>
 
       <PreferencesModal
@@ -943,7 +1034,7 @@ export default function App() {
         onClose={() => setWordCountOpen(false)}
       />
 
-      {statusBarVisible && <StatusBar
+      {statusBarVisible && !epubDocument && <StatusBar
         t={t}
         sidebarOpen={sidebarOpen}
         sourceMode={sourceMode}

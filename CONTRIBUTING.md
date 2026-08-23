@@ -28,6 +28,14 @@ Open the generated portable executable with a real `.md` file and verify:
 - External file changes never replace an unsaved editor buffer; an actual modification-time conflict prompts instead of silently overwriting the disk file.
 - Light, Night, and Follow System themes work.
 
+For EPUB changes, use the official [W3C/IDPF EPUB 3 samples](https://github.com/IDPF/epub3-samples) and verify at minimum:
+
+- A reflowable book opens with title, author, TOC, pagination, scrolling, font sizing, and restored reading position.
+- A fixed-layout book remains visually intact and fits the reader without MarkLens typography overrides.
+- An Arabic RTL book advances in publication order and exposes correct Previous/Next labels.
+- A Japanese vertical-writing book keeps vertical glyph flow and publication progression.
+- A renamed non-ZIP `.epub` displays an actionable error rather than a blank surface.
+
 ## Code Style
 
 - Keep React components small and domain-named.
@@ -38,4 +46,4 @@ Open the generated portable executable with a real `.md` file and verify:
 
 ## Security Notes
 
-Treat Markdown files as untrusted input. Do not enable raw HTML rendering or widen preload APIs without a clear reason and tests.
+Treat Markdown and EPUB files as untrusted input. Do not enable raw HTML/publication scripts or widen preload APIs without a clear reason and tests.

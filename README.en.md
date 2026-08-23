@@ -2,32 +2,34 @@
 
 Language: [简体中文](README.md) | English
 
-MarkLens is a free, open-source WYSIWYG Markdown editor and maintenance tool for Windows. It offers a Typora-inspired editing surface while keeping a source mode for direct Markdown changes.
+MarkLens is a free, open-source Markdown editor, maintenance tool, and EPUB reader for Windows. It offers a Typora-inspired Markdown surface with direct source editing, then switches to a focused reading experience for books.
 
 MarkLens keeps the document first: the sidebar is hidden by default, the outline is the primary navigation surface, and the file tree appears only when it is useful.
 
 ## Download
 
-The current project version is **v0.2.4**. Published Windows builds are available from the [Releases page](https://github.com/syd191/marklens/releases); running `npm run dist` produces:
+The current project version is **v0.3.0**. Published Windows builds are available from the [Releases page](https://github.com/syd191/marklens/releases); running `npm run dist` produces:
 
-- `MarkLens-Setup-0.2.4-x64.exe`: per-user installer.
-- `MarkLens-0.2.4-x64.zip`: regular ZIP distribution recommended for managed intranets.
+- `MarkLens-Setup-0.3.0-x64.exe`: per-user installer.
+- `MarkLens-0.3.0-x64.zip`: regular ZIP distribution recommended for managed intranets.
 
 > Windows builds are currently unsigned, so Microsoft Defender SmartScreen may prompt on first launch.
 
 ## Screenshots
 
-MarkLens 0.2.4 complete Markdown preview:
+Complete Markdown preview:
 
-![MarkLens 0.2.4 complete Markdown preview](docs/screenshots/reading-night.png)
+![MarkLens complete Markdown preview](docs/screenshots/reading-night.png)
 
-MarkLens 0.2.4 outline navigation:
+EPUB reading in the Night theme:
 
-![MarkLens 0.2.4 outline view](docs/screenshots/outline-night.png)
+![MarkLens EPUB reader in the Night theme](docs/screenshots/epub-night.png)
 
 ## What It Does
 
-- Opens `.md`, `.markdown`, and `.txt` files.
+- Opens `.md`, `.markdown`, `.txt`, and `.epub` files; Windows builds can register the EPUB association.
+- Reads unencrypted EPUB 2/3 publications, including reflowable, fixed-layout, right-to-left, and vertical-writing books.
+- Provides EPUB contents navigation, paginated/scrolling flow, font sizing, chapter and progress navigation, and reading-position persistence.
 - Starts in source mode; regular CommonMark/GFM documents can use WYSIWYG editing, while advanced syntax uses the complete document preview.
 - Generates a document outline and lets you jump between headings.
 - Provides Outline, Files, and Search sidebar views.
@@ -55,6 +57,14 @@ MarkLens 0.2.4 outline navigation:
 - Document tables of contents (`[TOC]` / `[[toc]]`)
 - YAML Front Matter
 
+## EPUB Support and Boundaries
+
+- Parsing is provided by a pinned [foliate-js](https://github.com/johnfactotum/foliate-js) commit behind a MarkLens adapter, containing the impact of upstream API changes.
+- Publication reading order, language direction, vertical writing, and fixed layout are preserved; themes and font size are applied only to reflowable content.
+- Publication scripts are disabled by the content security policy, and external links can only be opened through the system browser.
+- DRM, encrypted resources, and script-dependent interactive books are not supported. A single EPUB is limited to 512 MB for safe in-memory loading.
+- Corrupt containers, invalid `container.xml` / OPF metadata, and renamed non-EPUB files produce an actionable error instead of a blank reader.
+
 ## Performance Approach
 
 MarkLens is built to make opening and browsing Markdown feel immediate:
@@ -62,6 +72,7 @@ MarkLens is built to make opening and browsing Markdown feel immediate:
 - The window immediately shows its themed background so renderer failures cannot leave it hidden; startup failures are logged locally.
 - The initial HTML shell applies the saved/system theme before React loads to reduce white flashes.
 - The rich editor is lazy-loaded, so source-mode startup does not load the Lexical/MDXEditor bundle.
+- The EPUB reader and foliate-js are separate lazy chunks, so Markdown startup does not load the book engine.
 - Math, Mermaid, footnotes, TOCs, Front Matter, and HTML render as one document to preserve document-level semantics.
 - Outline generation is deferred by default and runs when needed.
 - Mermaid is loaded on demand and renders each diagram into an isolated SVG.
@@ -71,7 +82,8 @@ MarkLens is built to make opening and browsing Markdown feel immediate:
 
 - Raw HTML is sanitized with DOMPurify: safe formatting remains, while scripts and event handlers are removed.
 - Electron context isolation and sandbox mode are enabled.
-- File access is limited to Markdown-like text files.
+- File access is limited to Markdown-like text files and read-only EPUB publications.
+- EPUB content renders in isolated frames under a strict CSP that blocks publication scripts and limits object, form, and network capabilities.
 - Auto save is opt-in and strictly checks the file modification time before writing.
 - Save and automatic refresh revalidate the current document snapshot after asynchronous I/O, preventing late results from overwriting newer edits.
 
@@ -118,6 +130,7 @@ Build artifacts are written to `dist-build/` together with `build-manifest.json`
 - `src/components/`: React UI components.
 - `src/components/RichMarkdownEditor.tsx`: WYSIWYG editor and semantic command bridge.
 - `src/components/SourceEditor.tsx`: source editor, history, find, and selection operations.
+- `src/components/EpubReader.tsx`: EPUB contents, layout, navigation, theming, and reading progress.
 - `src/lib/editorCommands.ts`: tested Markdown source transformations.
 - `src/lib/markdown.ts`: strict Front Matter recognition, outline extraction, compatibility analysis, safe HTML, and whole-document rendering.
 - `src/lib/i18n.ts`: Simplified Chinese / Traditional Chinese / English UI strings and language resolution.

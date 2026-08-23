@@ -54,6 +54,13 @@
       "description": "Markdown Document",
       "icon": "assets/icon.ico",
       "role": "Editor"
+    },
+    {
+      "ext": "epub",
+      "name": "EPUB Book",
+      "description": "EPUB Electronic Book",
+      "icon": "assets/icon.ico",
+      "role": "Viewer"
     }
   ]
 }

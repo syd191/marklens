@@ -3,26 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline' blob:; img-src 'self' data: blob:; font-src 'self' data: blob:; media-src 'self' data: blob:; frame-src blob:; worker-src 'self' blob:; connect-src 'self' ws: http://127.0.0.1:*; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
     <title>MarkLens</title>
-    <script>
-      (() => {
-        try {
-          const saved = JSON.parse(localStorage.getItem("marklens-preferences-v1") || "{}");
-          const systemNight = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
-          const savedTheme = saved.themeMode === "light" ? "github" : saved.themeMode;
-          const theme = savedTheme === "system" || !savedTheme
-            ? (systemNight ? "night" : "github")
-            : savedTheme;
-          document.documentElement.dataset.theme = theme;
-          document.documentElement.style.colorScheme = theme === "night" ? "dark" : "light";
-        } catch {
-          if (window.matchMedia?.("(prefers-color-scheme: dark)")?.matches) {
-            document.documentElement.dataset.theme = "night";
-            document.documentElement.style.colorScheme = "dark";
-          }
-        }
-      })();
-    </script>
+    <script type="module" src="/src/theme-init.ts"></script>
     <style>
       html,
       body,

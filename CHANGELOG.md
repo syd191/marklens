@@ -2,6 +2,25 @@
 
 All notable changes to MarkLens are documented here.
 
+## 0.3.0 - 2026-08-24
+
+### Added
+
+- Add read-only EPUB 2/3 support using a pinned foliate-js engine behind a MarkLens adapter.
+- Add polished paginated and scrolling reading modes with table of contents, font controls, chapter navigation, progress seeking, and per-book location persistence.
+- Support fixed-layout publications, right-to-left progression, vertical writing, localized metadata, drag-and-drop, recent books, command-line opening, and Windows `.epub` file association.
+- Add actionable errors for empty, oversized, corrupt, malformed, encrypted, and DRM-protected publications.
+
+### Changed
+
+- Lazy-load the EPUB reader and engine so Markdown startup and editing bundles remain unchanged.
+- Apply MarkLens themes only to reflowable EPUB content while preserving fixed-layout geometry and publication-defined writing modes.
+- Harden renderer navigation and EPUB frames with validated external URLs and a strict content security policy that blocks publication scripts.
+
+### Tested
+
+- Validate against official W3C/IDPF samples for reflowable English, fixed-layout comics, Arabic RTL progression, and Japanese vertical writing.
+
 ## 0.2.4 - 2026-08-19
 
 ### Added

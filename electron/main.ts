@@ -4,6 +4,16 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 type ThemeMode = "light" | "night";
+type OpenedEpub = {
+  kind: "epub";
+  filePath: string;
+  name: string;
+  directory: string;
+  data: ArrayBuffer;
+  openError?: string;
+  mtimeMs: number;
+  size: number;
+};
 type SavePayload = {
   filePath: string;
   content: string;
@@ -52,7 +62,7 @@ const forceCloseWindows = new Set<number>();
 const recentPaths: string[] = [];
 
 const isDev = !app.isPackaged;
-const devUrl = "http://127.0.0.1:5173";
+const devUrl = process.env.MARKLENS_DEV_URL || "http://127.0.0.1:5173";
 const productName = "MarkLens";
 const projectRepositoryUrl = "https://github.com/syd191/marklens";
 
@@ -85,6 +95,8 @@ const menuText: Record<AppLanguage, {
   night: string;
   about: string;
   markdownFilter: string;
+  documentFilter: string;
+  epubFilter: string;
   folderDialog: string;
   htmlFilter: string;
 }> = {
@@ -115,6 +127,8 @@ const menuText: Record<AppLanguage, {
     night: "夜间",
     about: "关于 MarkLens",
     markdownFilter: "Markdown 文档",
+    documentFilter: "MarkLens 文档",
+    epubFilter: "EPUB 电子书",
     folderDialog: "打开文件夹",
     htmlFilter: "HTML 文件"
   },
@@ -145,6 +159,8 @@ const menuText: Record<AppLanguage, {
     night: "Night",
     about: "About MarkLens",
     markdownFilter: "Markdown Documents",
+    documentFilter: "MarkLens Documents",
+    epubFilter: "EPUB Books",
     folderDialog: "Open Folder",
     htmlFilter: "HTML Files"
   }
@@ -167,9 +183,23 @@ function isMarkdownLike(filePath: string): boolean {
   return ext === ".md" || ext === ".markdown" || ext === ".txt";
 }
 
+function isEpubLike(filePath: string): boolean {
+  return path.extname(filePath).toLowerCase() === ".epub";
+}
+
+function isSupportedDocument(filePath: string): boolean {
+  return isMarkdownLike(filePath) || isEpubLike(filePath);
+}
+
 function ensureMarkdownFile(filePath: string) {
   if (!isMarkdownLike(filePath)) {
     throw new Error("Unsupported file type. MarkLens opens .md, .markdown, and .txt files.");
+  }
+}
+
+function ensureEpubFile(filePath: string) {
+  if (!isEpubLike(filePath)) {
+    throw new Error("Unsupported file type. MarkLens opens .epub books.");
   }
 }
 
@@ -215,7 +245,7 @@ function getLaunchPath(argv: string[]): string | null {
     if (!arg || arg.startsWith("-")) return false;
     try {
       const stat = fs.existsSync(arg) ? fs.statSync(arg) : null;
-      return Boolean(stat?.isFile() && isMarkdownLike(arg));
+      return Boolean(stat?.isFile() && isSupportedDocument(arg));
     } catch {
       return false;
     }
@@ -523,6 +553,10 @@ function createWindow() {
   });
   mainWindow = window;
   const webContentsId = window.webContents.id;
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
 
   if (isDev) {
     void window.loadURL(devUrl).catch((error) => logStartup("load-url-failed", { message: String(error) }));
@@ -570,13 +604,9 @@ async function readTextFile(filePath: string) {
     throw new Error("Path is not a file.");
   }
   const content = await fs.promises.readFile(filePath, "utf8");
-  const existingIndex = recentPaths.findIndex((item) => item.toLowerCase() === filePath.toLowerCase());
-  if (existingIndex >= 0) recentPaths.splice(existingIndex, 1);
-  recentPaths.unshift(filePath);
-  recentPaths.splice(10);
-  app.addRecentDocument(filePath);
-  createMenu();
+  rememberRecentDocument(filePath);
   return {
+    kind: "markdown" as const,
     filePath,
     name: path.basename(filePath),
     directory: path.dirname(filePath),
@@ -586,11 +616,70 @@ async function readTextFile(filePath: string) {
   };
 }
 
+const MAX_EPUB_BYTES = 512 * 1024 * 1024;
+
+function rememberRecentDocument(filePath: string) {
+  const existingIndex = recentPaths.findIndex((item) => item.toLowerCase() === filePath.toLowerCase());
+  if (existingIndex >= 0) recentPaths.splice(existingIndex, 1);
+  recentPaths.unshift(filePath);
+  recentPaths.splice(10);
+  app.addRecentDocument(filePath);
+  createMenu();
+}
+
+async function readEpubFile(filePath: string): Promise<OpenedEpub> {
+  ensureEpubFile(filePath);
+  const stat = await fs.promises.stat(filePath);
+  if (!stat.isFile()) throw new Error("Path is not a file.");
+  const common = {
+    kind: "epub" as const,
+    filePath,
+    name: path.basename(filePath),
+    directory: path.dirname(filePath),
+    mtimeMs: stat.mtimeMs,
+    size: stat.size
+  };
+  const fail = (openError: string): OpenedEpub => ({
+    ...common,
+    data: new ArrayBuffer(0),
+    openError
+  });
+  if (stat.size < 4) return fail("EPUB_EMPTY: The EPUB file is empty or incomplete.");
+  if (stat.size > MAX_EPUB_BYTES) {
+    return fail("EPUB_TOO_LARGE: This EPUB is larger than the 512 MB safety limit.");
+  }
+
+  // EPUB is an OCF ZIP container. Reject obvious mislabelled/corrupted files before
+  // passing them to the renderer so the user gets a useful error instead of a blank view.
+  const handle = await fs.promises.open(filePath, "r");
+  try {
+    const signature = Buffer.allocUnsafe(4);
+    await handle.read(signature, 0, signature.length, 0);
+    if (!(signature[0] === 0x50 && signature[1] === 0x4b && signature[2] === 0x03 && signature[3] === 0x04)) {
+      return fail("EPUB_INVALID_CONTAINER: The file is not a valid EPUB ZIP container.");
+    }
+  } finally {
+    await handle.close();
+  }
+
+  const buffer = await fs.promises.readFile(filePath);
+  const data = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+  rememberRecentDocument(filePath);
+  return {
+    ...common,
+    data,
+  };
+}
+
+async function openDocument(filePath: string) {
+  return isEpubLike(filePath) ? readEpubFile(filePath) : readTextFile(filePath);
+}
+
 async function listDirectory(dirPath: string) {
   const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
   const children = entries
     .filter((entry) => !entry.name.startsWith("."))
-    .filter((entry) => entry.isDirectory() || isMarkdownLike(entry.name))
+    .filter((entry) => entry.isDirectory() || isSupportedDocument(entry.name))
     .slice(0, 800)
     .map((entry) => {
       const childPath = path.join(dirPath, entry.name);
@@ -655,7 +744,11 @@ async function renameEntry(targetPath: string, nextName: string): Promise<FileOp
     const stat = await fs.promises.stat(targetPath);
     const parentPath = path.dirname(targetPath);
     const nextPath = path.join(parentPath, cleanName);
-    if (stat.isFile() && isMarkdownLike(targetPath) && !isMarkdownLike(nextPath)) {
+    if (
+      stat.isFile() &&
+      ((isMarkdownLike(targetPath) && !isMarkdownLike(nextPath)) ||
+        (isEpubLike(targetPath) && !isEpubLike(nextPath)))
+    ) {
       return { ok: false, reason: "invalid-extension" };
     }
     if (path.resolve(targetPath) === path.resolve(nextPath)) {
@@ -730,10 +823,14 @@ function registerIpc() {
     const result = await dialog.showOpenDialog(owner, {
       title: t.openFile.replace("...", ""),
       properties: ["openFile"],
-      filters: [{ name: t.markdownFilter, extensions: ["md", "markdown", "txt"] }]
+      filters: [
+        { name: t.documentFilter, extensions: ["md", "markdown", "txt", "epub"] },
+        { name: t.markdownFilter, extensions: ["md", "markdown", "txt"] },
+        { name: t.epubFilter, extensions: ["epub"] }
+      ]
     });
     if (result.canceled || !result.filePaths[0]) return null;
-    return readTextFile(result.filePaths[0]);
+    return openDocument(result.filePaths[0]);
   });
 
   ipcMain.handle("dialog:open-folder", async (event) => {
@@ -749,6 +846,7 @@ function registerIpc() {
   });
 
   ipcMain.handle("file:read", async (_event, filePath: string) => readTextFile(filePath));
+  ipcMain.handle("file:open", async (_event, filePath: string) => openDocument(filePath));
 
   ipcMain.handle("file:save", async (_event, payload: SavePayload) => {
     const { filePath, content, expectedMtimeMs, force } = payload;
@@ -978,6 +1076,11 @@ function registerIpc() {
     await shell.openExternal(projectRepositoryUrl);
     return { ok: true };
   });
+  ipcMain.handle("app:open-external-url", async (_event, url: string) => {
+    if (!/^https?:\/\//i.test(url)) return { ok: false, reason: "unsupported-url" };
+    await shell.openExternal(url);
+    return { ok: true };
+  });
   ipcMain.handle("window:new", async () => {
     createWindow();
     return { ok: true };
@@ -1068,7 +1171,7 @@ if (!hasSingleInstanceLock) {
 
   app.on("open-file", (event, filePath) => {
     event.preventDefault();
-    if (!isMarkdownLike(filePath)) return;
+    if (!isSupportedDocument(filePath)) return;
     pendingOpenPath = filePath;
     if (mainWindow) sendOpenPath(filePath);
   });

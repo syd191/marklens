@@ -451,12 +451,40 @@ function buildMenu(
   l: Labels,
   themeMode: ThemeMode,
   recentFiles: string[],
-  modes: { sourceMode: boolean; focusMode: boolean; typewriterMode: boolean; statusBar: boolean }
+  modes: { sourceMode: boolean; focusMode: boolean; typewriterMode: boolean; statusBar: boolean; readerMode: boolean }
 ): MenuGroup[] {
   const sep = (): MenuSeparator => ({ separator: true });
-  const item = (label: string, command: string, accelerator?: string): MenuLeaf => ({ label, command, accelerator });
-  const action = (label: string, action: MenuLeaf["action"], accelerator?: string): MenuLeaf => ({ label, action, accelerator });
-  const check = (label: string, command: string, checked: boolean): MenuLeaf => ({ label, command, checked });
+  const disabledInReader = new Set([
+    "save", "save-as", "move-to", "save-all", "export-html", "export-pdf",
+    "undo", "redo", "copy-plain", "copy-markdown", "copy-html", "paste-plain",
+    "select-line", "move-line-up", "move-line-down", "delete", "delete-line",
+    "math-block", "smart-punctuation", "normalize-line-endings", "trim-whitespace",
+    "toggle-spellcheck", "find-replace", "heading-1", "heading-2", "heading-3",
+    "heading-4", "heading-5", "heading-6", "paragraph", "table", "code-block",
+    "warning", "quote", "ordered-list", "unordered-list", "task-list", "indent-list",
+    "outdent-list", "footnote", "horizontal-rule", "toc", "front-matter", "bold",
+    "italic", "underline", "inline-code", "strikethrough", "comment", "link", "image",
+    "clear-format", "toggle-sidebar", "show-outline", "show-search", "toggle-source",
+    "toggle-typewriter", "toggle-status-bar", "word-count"
+  ]);
+  const item = (label: string, command: string, accelerator?: string): MenuLeaf => ({
+    label,
+    command,
+    accelerator,
+    disabled: modes.readerMode && disabledInReader.has(command)
+  });
+  const action = (label: string, action: MenuLeaf["action"], accelerator?: string): MenuLeaf => ({
+    label,
+    action,
+    accelerator,
+    disabled: modes.readerMode && ["cut", "copy", "paste", "select-all"].includes(action ?? "")
+  });
+  const check = (label: string, command: string, checked: boolean): MenuLeaf => ({
+    label,
+    command,
+    checked,
+    disabled: modes.readerMode && disabledInReader.has(command)
+  });
   const recentItem = (filePath: string, idx: number): MenuLeaf => ({
     label: `${idx < 9 ? `${idx + 1} ` : ""}${filePath.split(/[\\/]/).pop()}`,
     openPath: filePath
@@ -637,6 +665,7 @@ type MenuBarProps = {
   focusMode: boolean;
   typewriterMode: boolean;
   statusBar: boolean;
+  readerMode: boolean;
   onCommand: (command: string) => void;
   onOpenPath: (filePath: string) => void;
   onZoomIn: () => void;
@@ -645,7 +674,7 @@ type MenuBarProps = {
   onFocusEditor: () => void;
 };
 
-export const MenuBar = memo(function MenuBar({ language, themeMode, sourceMode, focusMode, typewriterMode, statusBar, onCommand, onOpenPath, onZoomIn, onZoomOut, onZoomReset, onFocusEditor }: MenuBarProps) {
+export const MenuBar = memo(function MenuBar({ language, themeMode, sourceMode, focusMode, typewriterMode, statusBar, readerMode, onCommand, onOpenPath, onZoomIn, onZoomOut, onZoomReset, onFocusEditor }: MenuBarProps) {
   const labels = language === "en-US" ? enLabels : language === "zh-TW" ? zhTWLabels : zhLabels;
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
@@ -655,8 +684,8 @@ export const MenuBar = memo(function MenuBar({ language, themeMode, sourceMode, 
   }, [openIndex]);
   // 仅在语言/主题/模式/最近文件变化时重建菜单树，避免每次渲染都重新构造数百个对象
   const groups = useMemo(
-    () => buildMenu(labels, themeMode, recentFiles, { sourceMode, focusMode, typewriterMode, statusBar }),
-    [labels, themeMode, recentFiles, sourceMode, focusMode, typewriterMode, statusBar]
+    () => buildMenu(labels, themeMode, recentFiles, { sourceMode, focusMode, typewriterMode, statusBar, readerMode }),
+    [labels, themeMode, recentFiles, sourceMode, focusMode, typewriterMode, statusBar, readerMode]
   );
   const barRef = useRef<HTMLDivElement>(null);
 

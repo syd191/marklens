@@ -30,6 +30,7 @@ type ThemeMode = "system" | "github" | "newsprint" | "night" | "pixyll" | "white
 type ResolvedTheme = "github" | "newsprint" | "night" | "pixyll" | "whitey";
 
 type OpenedFile = {
+  kind: "markdown";
   filePath: string;
   name: string;
   directory: string;
@@ -37,6 +38,19 @@ type OpenedFile = {
   mtimeMs: number;
   size: number;
 };
+
+type OpenedEpub = {
+  kind: "epub";
+  filePath: string;
+  name: string;
+  directory: string;
+  data: ArrayBuffer;
+  openError?: string;
+  mtimeMs: number;
+  size: number;
+};
+
+type OpenedDocument = OpenedFile | OpenedEpub;
 
 type DirectoryChild = {
   name: string;
@@ -59,9 +73,10 @@ type FileOperationResult =
   | { ok: false; reason: string };
 
 type MarkdownBridge = {
-  openFileDialog: () => Promise<OpenedFile | null>;
+  openFileDialog: () => Promise<OpenedDocument | null>;
   openFolderDialog: () => Promise<DirectoryListing | null>;
   readFile: (filePath: string) => Promise<OpenedFile>;
+  openDocument: (filePath: string) => Promise<OpenedDocument>;
   saveFile: (payload: {
     filePath: string;
     content: string;
@@ -98,6 +113,7 @@ type MarkdownBridge = {
   applyTheme: (themeMode: ThemeMode) => Promise<void>;
   getSystemLanguage: () => Promise<string>;
   openProjectRepository: () => Promise<{ ok: boolean }>;
+  openExternalUrl: (url: string) => Promise<{ ok: boolean; reason?: string }>;
   createNewWindow: () => Promise<{ ok: boolean }>;
   print: () => Promise<{ ok: boolean; reason?: string }>;
   setFullscreen: (enabled: boolean) => Promise<{ ok: boolean }>;
